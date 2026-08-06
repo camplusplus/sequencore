@@ -1,4 +1,4 @@
-For your exact use case — Launchpad X as the sequencer controller, and MIDI DIN/DOUT to your instruments — the “ready to wire” setup is:
+Launchpad X as the sequencer controller, and MIDI DIN/DOUT to your instruments 
 
 Flashing the Teensy
 Use the Teensy’s programming USB connector only to upload firmware.
