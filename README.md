@@ -1,4 +1,4 @@
-Launchpad X as the sequencer controller, and MIDI DIN/DOUT to your instruments 
+Teensy 4.1 as headless sequencer, Launchpad X as the sequencer controller, and MIDI DIN/DOUT to your instruments 
 
 Flashing the Teensy
 Use the Teensy’s programming USB connector only to upload firmware.
