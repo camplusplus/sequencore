@@ -193,7 +193,7 @@ optocoupler power/GND ----> 5V/GND on the MIDI breakout board or isolated board
 
 Important detail:
 - The MIDI OUT is not “TTL level out”; it is a current loop that uses a resistor and a 5 V source.
-- The MIDI IN side uses an optocoupler, so the 5 V on the cable side is isolated from the Teensy.
+- The MIDI IN side uses an optocoupler, so the 5 V on the cable side is isolated from the Teensy.Launchpad X
 
 Practical recommendation:
 - Buy a tiny ready-made 5-pin DIN MIDI IN/OUT breakout board, or
@@ -217,3 +217,5 @@ If you want, I can give you the exact “perfboard-ready” schematic for:
 - Teensy 4.1 pin 0/1
 - 6N138 optocoupler
 - all resistor values in one pasteable diagram.
+
+Launchpad X is property of Novation
