@@ -1,5 +1,8 @@
 Teensy 4.1 as headless sequencer, Launchpad X as the sequencer controller, and MIDI DIN/DOUT to your instruments 
 
+<img width="960" height="960" alt="image" src="https://github.com/user-attachments/assets/140697f5-9226-40e7-b805-896ed53aa945" />
+
+
 Flashing the Teensy
 Use the Teensy’s programming USB connector only to upload firmware.
 Build and upload from the project folder with:
