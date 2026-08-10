@@ -16,7 +16,7 @@ constexpr uint8_t kStepCount = 16;
 constexpr uint8_t kMidiChannelCount = 16;
 constexpr uint8_t kLaunchpadGridNoteMin = 0;
 constexpr uint8_t kLaunchpadGridNoteMax = 63;
-constexpr uint8_t kLaunchpadTopRowNoteMin = 104;
+constexpr uint8_t kLaunchpadTopRowNoteMin = 60;
 constexpr uint8_t kLaunchpadTopRowNoteMax = 111;
 constexpr uint8_t kLaunchpadRightColumnNoteMin = 112;
 constexpr uint8_t kLaunchpadRightColumnNoteMax = 119;
@@ -55,6 +55,12 @@ bool g_overdub = false;
 elapsedMillis g_stepTimer;
 elapsedMillis g_clockPulseTimer;
 elapsedMillis g_ledTimer;
+elapsedMillis g_statusTimer;
+elapsedMillis g_launchpadInitTimer;
+bool g_seenLaunchpadInput = false;
+bool g_launchpadProgramModeSent = false;
+bool g_launchpadTestPatternSent = false;
+bool g_launchpadControlLedsInitialized = false;
 
 void refreshLaunchpadGridLedState();
 
@@ -114,7 +120,20 @@ void stageLaunchpadPad(byte channel, byte note, byte velocity, bool active) {
 }
 
 void setLaunchpadLedColor(byte note, byte color) {
-  launchpad.send(0x90, note, color, 1);
+  static const uint8_t kLaunchpadSysexHeader[] = {0xF0, 0x00, 0x20, 0x29, 0x02, 0x0C};
+  uint8_t data[sizeof(kLaunchpadSysexHeader) + 4];
+  memcpy(data, kLaunchpadSysexHeader, sizeof(kLaunchpadSysexHeader));
+  data[sizeof(kLaunchpadSysexHeader)] = 0x03;
+  data[sizeof(kLaunchpadSysexHeader) + 1] = 0x00;
+  data[sizeof(kLaunchpadSysexHeader) + 2] = note;
+  data[sizeof(kLaunchpadSysexHeader) + 3] = color;
+  launchpad.sendSysEx(sizeof(kLaunchpadSysexHeader) + 4, data, false);
+  delayMicroseconds(100);
+}
+
+void sendLaunchpadProgramMode() {
+  static const uint8_t kProgramModeSysex[] = {0xF0, 0x00, 0x20, 0x29, 0x02, 0x0C, 0x0E, 0x01, 0xF7};
+  launchpad.sendSysEx(sizeof(kProgramModeSysex), kProgramModeSysex, true);
 }
 
 void clearCurrentStep(uint8_t step) {
@@ -160,7 +179,24 @@ void refreshLaunchpadGridLedState() {
   }
 }
 
+void testLaunchpadControlButtons() {
+  for (uint8_t i = 0; i < 8; ++i) {
+    setLaunchpadLedColor(kLaunchpadTopRowNoteMin + i, kLaunchpadColorGreenHigh);
+  }
+  for (uint8_t i = 0; i < 8; ++i) {
+    setLaunchpadLedColor(kLaunchpadRightColumnNoteMin + i, kLaunchpadColorAmberHigh);
+  }
+  delay(750);
+}
+
 void refreshLaunchpadControlLedState() {
+  for (uint8_t i = 0; i < 8; ++i) {
+    setLaunchpadLedColor(kLaunchpadTopRowNoteMin + i, kLaunchpadColorOff);
+  }
+  for (uint8_t i = 0; i < 8; ++i) {
+    setLaunchpadLedColor(kLaunchpadRightColumnNoteMin + i, kLaunchpadColorOff);
+  }
+
   setLaunchpadLedColor(kLaunchpadTopRowNoteMin + 0, g_tempoBpm <= kMinTempoBpm ? kLaunchpadColorAmberLow : kLaunchpadColorGreenLow);
   setLaunchpadLedColor(kLaunchpadTopRowNoteMin + 1, g_tempoBpm >= kMaxTempoBpm ? kLaunchpadColorAmberLow : kLaunchpadColorGreenLow);
   setLaunchpadLedColor(kLaunchpadTopRowNoteMin + 2, g_microstepDivisions > 1 ? kLaunchpadColorAmberHigh : kLaunchpadColorOff);
@@ -258,6 +294,8 @@ void handleLaunchpadControl(byte note) {
 }
 
 void onLaunchpadNoteOn(byte channel, byte note, byte velocity) {
+  g_seenLaunchpadInput = true;
+  Serial.printf("Launchpad note on ch=%u note=%u vel=%u\n", channel + 1, note, velocity);
   if (isLaunchpadControlNote(note)) {
     handleLaunchpadControl(note);
     return;
@@ -268,6 +306,8 @@ void onLaunchpadNoteOn(byte channel, byte note, byte velocity) {
 }
 
 void onLaunchpadNoteOff(byte channel, byte note, byte velocity) {
+  g_seenLaunchpadInput = true;
+  Serial.printf("Launchpad note off ch=%u note=%u vel=%u\n", channel + 1, note, velocity);
   if (isLaunchpadControlNote(note)) {
     return;
   }
@@ -380,9 +420,21 @@ void setup() {
   launchpad.setHandleControlChange(onLaunchpadControlChange);
 
   myusb.begin();
+
+  delay(500);
+  sendLaunchpadProgramMode();
+  delay(250);
+  testLaunchpadControlButtons();
   refreshLaunchpadControlLedState();
   refreshLaunchpadGridLedState();
+
+
+
+
+
   Serial.println("Launchpad USB host + 16-channel MIDI ready");
+  Serial.println("Waiting for Launchpad X on the Teensy USB host port...");
+
   refreshLaunchpadControlLedState();
 }
 
@@ -409,5 +461,12 @@ void loop() {
   if (g_ledTimer >= 250) {
     g_ledTimer = 0;
     digitalWriteFast(LED_BUILTIN, !digitalReadFast(LED_BUILTIN));
+  }
+
+  if (g_statusTimer >= 1000) {
+    g_statusTimer = 0;
+    if (!g_seenLaunchpadInput) {
+      Serial.println("USB host task running; no Launchpad input seen yet");
+    }
   }
 }
