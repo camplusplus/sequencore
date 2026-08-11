@@ -16,7 +16,7 @@ constexpr uint8_t kStepCount = 16;
 constexpr uint8_t kMidiChannelCount = 16;
 constexpr uint8_t kLaunchpadGridNoteMin = 0;
 constexpr uint8_t kLaunchpadGridNoteMax = 63;
-constexpr uint8_t kLaunchpadTopRowNoteMin = 60;
+constexpr uint8_t kLaunchpadTopRowNoteMin = 104;
 constexpr uint8_t kLaunchpadTopRowNoteMax = 111;
 constexpr uint8_t kLaunchpadRightColumnNoteMin = 112;
 constexpr uint8_t kLaunchpadRightColumnNoteMax = 119;
@@ -317,6 +317,7 @@ void onLaunchpadNoteOff(byte channel, byte note, byte velocity) {
 }
 
 void onLaunchpadControlChange(byte channel, byte control, byte value) {
+  Serial.printf("Launchpad  ch=%u control=%u val=%u\n", channel, control, value);
   (void)channel;
   (void)control;
   (void)value;
@@ -412,8 +413,8 @@ void setup() {
   }
 
   Serial1.begin(31250);
-  midiPort.begin(MIDI_CHANNEL_OMNI);
-  midiPort.sendStart();
+  // midiPort.begin(MIDI_CHANNEL_OMNI);
+  // midiPort.sendStart();
 
   launchpad.setHandleNoteOn(onLaunchpadNoteOn);
   launchpad.setHandleNoteOff(onLaunchpadNoteOff);
@@ -421,12 +422,12 @@ void setup() {
 
   myusb.begin();
 
-  delay(500);
-  sendLaunchpadProgramMode();
-  delay(250);
-  testLaunchpadControlButtons();
-  refreshLaunchpadControlLedState();
-  refreshLaunchpadGridLedState();
+  // delay(500);
+  // sendLaunchpadProgramMode();
+  // delay(250);
+  // testLaunchpadControlButtons();
+  // refreshLaunchpadControlLedState();
+  // refreshLaunchpadGridLedState();
 
 
 
@@ -435,13 +436,13 @@ void setup() {
   Serial.println("Launchpad USB host + 16-channel MIDI ready");
   Serial.println("Waiting for Launchpad X on the Teensy USB host port...");
 
-  refreshLaunchpadControlLedState();
+  // refreshLaunchpadControlLedState();
 }
 
 void loop() {
   myusb.Task();
   launchpad.read();
-
+/*
   if (midiPort.read()) {
     handleHardwareMidiIn();
   }
@@ -469,4 +470,5 @@ void loop() {
       Serial.println("USB host task running; no Launchpad input seen yet");
     }
   }
+    */
 }
