@@ -18,7 +18,8 @@ namespace
   uint8_t g_stepOffset = 0; // For scrolling steps left/right
   uint8_t g_channelOffset = 0; // For scrolling channels up/down
   constexpr uint8_t kLaunchpadGridNoteMin = 0;
-  constexpr uint8_t kLaunchpadGridNoteMax = 159;
+  //cannot be phisically more than 97, maybe virtually
+  constexpr uint8_t kLaunchpadGridNoteMax = 97;
   constexpr uint8_t kLaunchpadTopRowControlNoteMin = 91;
   constexpr uint8_t kLaunchpadTopRowControlNoteMax = 98;
   constexpr uint8_t kLaunchpadRightColumnControlNoteMin = 19;
