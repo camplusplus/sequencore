@@ -15,10 +15,10 @@ namespace
 {
   constexpr uint8_t kStepCount = 16;
   constexpr uint8_t kMidiChannelCount = 16;
-  uint8_t g_stepOffset = 0; // For scrolling steps left/right
+  uint8_t g_stepOffset = 0;    // For scrolling steps left/right
   uint8_t g_channelOffset = 0; // For scrolling channels up/down
   constexpr uint8_t kLaunchpadGridNoteMin = 0;
-  //cannot be phisically more than 88, maybe virtually
+  // cannot be phisically more than 88, maybe virtually
   constexpr uint8_t kLaunchpadGridNoteMax = 88;
   constexpr uint8_t kLaunchpadTopRowControlNoteMin = 91;
   constexpr uint8_t kLaunchpadTopRowControlNoteMax = 98;
@@ -199,107 +199,110 @@ namespace
       if (!isLaunchpadControlNote(note))
         setLaunchpadLedColor(note, kLaunchpadColorWhiteHigh);
     }
-    
+
     // Light up the scrolling indicator LEDs
     // First two top row buttons (91, 92) for channel scrolling
     setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 2, g_channelOffset > 0 ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
     setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 3, (g_channelOffset + 8) < kMidiChannelCount ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
-    
+
     // Next two top row buttons (93, 94) for step scrolling
     setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 4, g_stepOffset > 0 ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
     setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 5, (g_stepOffset + 8) < kStepCount ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
   }
 
-   void refreshLaunchpadControlLedState()
-   {
-     // Turn off all control LEDs first
-     for (uint8_t i = 0; i < 8; ++i)
-     {
-       setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + i, kLaunchpadColorOff);
-     }
-     for (uint8_t i = 0; i < 80; i += 10)
-     {
-       setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + i, kLaunchpadColorOff);
-     }
- 
-     // Set channel scrolling LEDs
-     setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 0, g_channelOffset > 0 ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
-     setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 1, (g_channelOffset + 8) < kMidiChannelCount ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
-     
-     // Set step scrolling LEDs
-     setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 2, g_stepOffset > 0 ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
-     setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 3, (g_stepOffset + 8) < kStepCount ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
+  void refreshLaunchpadControlLedState()
+  {
+    // Turn off all control LEDs first
+    for (uint8_t i = 0; i < 8; ++i)
+    {
+      setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + i, kLaunchpadColorOff);
+    }
+    for (uint8_t i = 0; i < 80; i += 10)
+    {
+      setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + i, kLaunchpadColorOff);
+    }
 
-     // Set tempo control LEDs
-     setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 4, g_tempoBpm <= kMinTempoBpm ? kLaunchpadColorAmberLow : kLaunchpadColorWhiteLow);
-     setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 5, g_tempoBpm >= kMaxTempoBpm ? kLaunchpadColorAmberLow : kLaunchpadColorWhiteLow);
-     
-     // Set other control LEDs
-     setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 6, g_microstepDivisions > 1 ? kLaunchpadColorAmberHigh : kLaunchpadColorOff);
-     setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 7, g_running ? kLaunchpadColorWhiteHigh : kLaunchpadColorRedHigh);
+    // Set channel scrolling LEDs
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 0, g_channelOffset > 0 ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 1, (g_channelOffset + 8) < kMidiChannelCount ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
 
-     // Set right column LEDs
-     setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 0, kLaunchpadColorRedHigh);
-     setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 10, kLaunchpadColorWhiteHigh);
-     setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 20, kLaunchpadColorBlueLow);
-     setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 30, kLaunchpadColorBlueLow);
-     setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 40, kLaunchpadColorAmberLow);
-     setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 50, kLaunchpadColorAmberLow);
-     setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 60, g_recording ? kLaunchpadColorRedHigh : kLaunchpadColorOff);
-     setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 70, g_overdub ? kLaunchpadColorBlueLow : kLaunchpadColorOff);
-   }
+    // Set step scrolling LEDs
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 2, g_stepOffset > 0 ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 3, (g_stepOffset + 8) < kStepCount ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
+
+    // Set tempo control LEDs
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 4, g_tempoBpm <= kMinTempoBpm ? kLaunchpadColorAmberLow : kLaunchpadColorWhiteLow);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 5, g_tempoBpm >= kMaxTempoBpm ? kLaunchpadColorAmberLow : kLaunchpadColorWhiteLow);
+
+    // Set other control LEDs
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 6, g_microstepDivisions > 1 ? kLaunchpadColorAmberHigh : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 7, g_running ? kLaunchpadColorWhiteHigh : kLaunchpadColorRedHigh);
+
+    // Set right column LEDs
+    setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 0, kLaunchpadColorRedHigh);
+    setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 10, kLaunchpadColorWhiteHigh);
+    setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 20, kLaunchpadColorBlueLow);
+    setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 30, kLaunchpadColorBlueLow);
+    setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 40, kLaunchpadColorAmberLow);
+    setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 50, kLaunchpadColorAmberLow);
+    setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 60, g_recording ? kLaunchpadColorRedHigh : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 70, g_overdub ? kLaunchpadColorBlueLow : kLaunchpadColorOff);
+  }
 
   void handleLaunchpadControl(byte note)
   {
-     Serial.printf("handled");
+    Serial.printf("handled");
     switch (note)
     {
     case kLaunchpadTopRowControlNoteMin + 0:
       // Channel scrolling up
-       Serial.printf("go up");
       if (g_channelOffset > 0)
       {
         g_channelOffset--;
       }
+      Serial.printf("go up=%u\n", g_channelOffset);
       break;
     case kLaunchpadTopRowControlNoteMin + 1:
       // Channel scrolling down
-      Serial.printf("go down");
       if ((g_channelOffset + 8) < kMidiChannelCount)
       {
         g_channelOffset++;
       }
+      Serial.printf("go down=%u\n", g_channelOffset);
       break;
     case kLaunchpadTopRowControlNoteMin + 2:
       // Step scrolling left
-      Serial.printf("go left");
       if (g_stepOffset > 0)
       {
         g_stepOffset--;
       }
+      Serial.printf("go left=%u\n", g_stepOffset);
       break;
     case kLaunchpadTopRowControlNoteMin + 3:
       // Step scrolling right
-      Serial.printf("go right");
       if ((g_stepOffset + 8) < kStepCount)
       {
         g_stepOffset++;
       }
+      Serial.printf("go right=%u\n", g_stepOffset);
       break;
     case kLaunchpadTopRowControlNoteMin + 4:
       if (g_tempoBpm > kMinTempoBpm)
       {
         g_tempoBpm -= 10;
       }
+      Serial.printf("go g_tempoBpm=%u\n", g_tempoBpm );
       break;
     case kLaunchpadTopRowControlNoteMin + 5:
       if (g_tempoBpm < kMaxTempoBpm)
       {
         g_tempoBpm += 10;
       }
+      Serial.printf("go g_tempoBpm=%u\n", g_tempoBpm );
       break;
     case kLaunchpadTopRowControlNoteMin + 6:
       g_microstepDivisions = (g_microstepDivisions >= kMicrostepMax) ? 1 : (g_microstepDivisions * 2);
+      Serial.printf("go g_microstepDivisions=%u\n", g_microstepDivisions );
       break;
     case kLaunchpadTopRowControlNoteMin + 7:
       g_running = !g_running;
@@ -311,6 +314,7 @@ namespace
       {
         midiPort.sendStop();
       }
+      Serial.printf("go g_running=%u\n", g_running );
       break;
     case kLaunchpadRightColumnControlNoteMin + 0:
       g_running = false;
@@ -363,7 +367,7 @@ namespace
   void onLaunchpadControlChange(byte channel, byte control, byte value)
   {
     Serial.printf("Launchpad  ch=%u control=%u val=%u\n", channel, control, value);
-     if (isLaunchpadControlNote(control))
+    if (isLaunchpadControlNote(control))
     {
       handleLaunchpadControl(control);
     }
