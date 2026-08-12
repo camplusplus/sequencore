@@ -258,7 +258,7 @@ namespace
       // Channel scrolling up
       if (g_channelOffset > 0)
       {
-        g_channelOffset--;
+        g_channelOffset -= 8;
       }
       Serial.printf("go up=%u\n", g_channelOffset);
       break;
@@ -266,7 +266,7 @@ namespace
       // Channel scrolling down
       if ((g_channelOffset + 8) < kMidiChannelCount)
       {
-        g_channelOffset++;
+        g_channelOffset += 8;
       }
       Serial.printf("go down=%u\n", g_channelOffset);
       break;
@@ -274,7 +274,7 @@ namespace
       // Step scrolling left
       if (g_stepOffset > 0)
       {
-        g_stepOffset--;
+        g_stepOffset -= 8;
       }
       Serial.printf("go left=%u\n", g_stepOffset);
       break;
@@ -282,7 +282,7 @@ namespace
       // Step scrolling right
       if ((g_stepOffset + 8) < kStepCount)
       {
-        g_stepOffset++;
+        g_stepOffset += 8;
       }
       Serial.printf("go right=%u\n", g_stepOffset);
       break;
@@ -367,7 +367,7 @@ namespace
   void onLaunchpadControlChange(byte channel, byte control, byte value)
   {
     Serial.printf("Launchpad  ch=%u control=%u val=%u\n", channel, control, value);
-    if (isLaunchpadControlNote(control))
+    if (value && isLaunchpadControlNote(control))
     {
       handleLaunchpadControl(control);
     }
