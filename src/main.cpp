@@ -15,8 +15,10 @@ namespace
 {
   constexpr uint8_t kStepCount = 16;
   constexpr uint8_t kMidiChannelCount = 16;
+  uint8_t g_stepOffset = 0; // For scrolling steps left/right
+  uint8_t g_channelOffset = 0; // For scrolling channels up/down
   constexpr uint8_t kLaunchpadGridNoteMin = 0;
-  constexpr uint8_t kLaunchpadGridNoteMax = 63;
+  constexpr uint8_t kLaunchpadGridNoteMax = 159;
   constexpr uint8_t kLaunchpadTopRowControlNoteMin = 91;
   constexpr uint8_t kLaunchpadTopRowControlNoteMax = 98;
   constexpr uint8_t kLaunchpadRightColumnControlNoteMin = 19;
@@ -73,11 +75,6 @@ namespace
   void refreshLaunchpadGridLedState();
   void refreshLaunchpadControlLedState();
 
-  bool isLaunchpadGridPad(byte note)
-  {
-    return note >= kLaunchpadGridNoteMin && note <= kLaunchpadGridNoteMax && !isLaunchpadControlNote(note);
-  }
-
   bool isLaunchpadTopRowControlNote(byte note)
   {
     return note >= kLaunchpadTopRowControlNoteMin && note <= kLaunchpadTopRowControlNoteMax;
@@ -95,6 +92,11 @@ namespace
   bool isLaunchpadControlNote(byte note)
   {
     return isLaunchpadTopRowControlNote(note) || isLaunchpadRightColumnControlNote(note);
+  }
+
+  bool isLaunchpadGridPad(byte note)
+  {
+    return note >= kLaunchpadGridNoteMin && note <= kLaunchpadGridNoteMax && !isLaunchpadControlNote(note);
   }
 
   uint16_t calculateStepDurationMs()
@@ -134,8 +136,8 @@ namespace
 
     const uint8_t row = note / 8;
     const uint8_t col = note % 8;
-    const uint8_t step = col;
-    const uint8_t laneChannel = row;
+    const uint8_t step = (col + g_stepOffset) % kStepCount;
+    const uint8_t laneChannel = (row + g_channelOffset) % kMidiChannelCount;
     StepLaneState &lane = g_sequence[step][laneChannel];
     lane.active = active;
     lane.note = note + 48;
@@ -196,6 +198,15 @@ namespace
       if (!isLaunchpadControlNote(note))
         setLaunchpadLedColor(note, kLaunchpadColorWhiteHigh);
     }
+    
+    // Light up the scrolling indicator LEDs
+    // First two top row buttons (91, 92) for channel scrolling
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 0, g_channelOffset > 0 ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 1, (g_channelOffset + 8) < kMidiChannelCount ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
+    
+    // Next two top row buttons (93, 94) for step scrolling
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 2, g_stepOffset > 0 ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 3, (g_stepOffset + 8) < kStepCount ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
   }
 
   void refreshLaunchpadControlLedState()
@@ -211,11 +222,11 @@ namespace
 
     setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 0, g_tempoBpm <= kMinTempoBpm ? kLaunchpadColorAmberLow : kLaunchpadColorWhiteLow);
     setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 1, g_tempoBpm >= kMaxTempoBpm ? kLaunchpadColorAmberLow : kLaunchpadColorWhiteLow);
-    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 2, g_microstepDivisions > 1 ? kLaunchpadColorAmberHigh : kLaunchpadColorOff);
-    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 3, g_swingPct < kSwingMax ? kLaunchpadColorAmberLow : kLaunchpadColorAmberHigh);
-    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 4, g_swingPct > 0 ? kLaunchpadColorAmberLow : kLaunchpadColorOff);
-    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 5, g_ratchetCount > 1 ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
-    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 6, g_ratchetCount > 1 ? kLaunchpadColorRedLow : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 2, g_channelOffset > 0 ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 3, (g_channelOffset + 8) < kMidiChannelCount ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 4, g_stepOffset > 0 ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 5, (g_stepOffset + 8) < kStepCount ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 6, g_microstepDivisions > 1 ? kLaunchpadColorAmberHigh : kLaunchpadColorOff);
     setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 7, g_running ? kLaunchpadColorWhiteHigh : kLaunchpadColorRedHigh);
 
     setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 0, kLaunchpadColorRedHigh);
@@ -245,31 +256,35 @@ namespace
       }
       break;
     case kLaunchpadTopRowControlNoteMin + 2:
-      g_microstepDivisions = (g_microstepDivisions >= kMicrostepMax) ? 1 : (g_microstepDivisions * 2);
+      // Channel scrolling up
+      if (g_channelOffset > 0)
+      {
+        g_channelOffset--;
+      }
       break;
     case kLaunchpadTopRowControlNoteMin + 3:
-      if (g_swingPct < kSwingMax)
+      // Channel scrolling down
+      if ((g_channelOffset + 8) < kMidiChannelCount)
       {
-        g_swingPct += 5;
+        g_channelOffset++;
       }
       break;
     case kLaunchpadTopRowControlNoteMin + 4:
-      if (g_swingPct > 0)
+      // Step scrolling left
+      if (g_stepOffset > 0)
       {
-        g_swingPct -= 5;
+        g_stepOffset--;
       }
       break;
     case kLaunchpadTopRowControlNoteMin + 5:
-      if (g_ratchetCount < kRatchetMax)
+      // Step scrolling right
+      if ((g_stepOffset + 8) < kStepCount)
       {
-        g_ratchetCount += 1;
+        g_stepOffset++;
       }
       break;
     case kLaunchpadTopRowControlNoteMin + 6:
-      if (g_ratchetCount > 1)
-      {
-        g_ratchetCount -= 1;
-      }
+      g_microstepDivisions = (g_microstepDivisions >= kMicrostepMax) ? 1 : (g_microstepDivisions * 2);
       break;
     case kLaunchpadTopRowControlNoteMin + 7:
       g_running = !g_running;
