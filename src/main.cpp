@@ -191,9 +191,10 @@ namespace
 
   void refreshLaunchpadGridLedState()
   {
-    for (uint8_t note = 0; note < kLaunchpadRightColumnControlNoteMax && !isLaunchpadControlNote(note); ++note)
+    for (uint8_t note = 0; note < kLaunchpadRightColumnControlNoteMax; ++note)
     {
-      setLaunchpadLedColor(note, kLaunchpadColorWhiteHigh);
+      if (!isLaunchpadControlNote(note))
+        setLaunchpadLedColor(note, kLaunchpadColorWhiteHigh);
     }
   }
 
