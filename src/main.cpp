@@ -6,7 +6,7 @@
 // Pins: TX = 1, RX = 0.
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, midiPort);
 
-// Connect the Novation Launchpad X to Teensy's USB host port.
+// Connect the Novation Launchpad X to Teensy's USB host port, solder edge +5V to host +5V pin.
 USBHost myusb;
 USBHub hub1(myusb);
 MIDIDevice_BigBuffer launchpad(myusb);
@@ -251,10 +251,12 @@ namespace
 
   void handleLaunchpadControl(byte note)
   {
+     Serial.printf("handled");
     switch (note)
     {
     case kLaunchpadTopRowControlNoteMin + 0:
       // Channel scrolling up
+       Serial.printf("go up");
       if (g_channelOffset > 0)
       {
         g_channelOffset--;
@@ -262,6 +264,7 @@ namespace
       break;
     case kLaunchpadTopRowControlNoteMin + 1:
       // Channel scrolling down
+      Serial.printf("go down");
       if ((g_channelOffset + 8) < kMidiChannelCount)
       {
         g_channelOffset++;
@@ -269,6 +272,7 @@ namespace
       break;
     case kLaunchpadTopRowControlNoteMin + 2:
       // Step scrolling left
+      Serial.printf("go left");
       if (g_stepOffset > 0)
       {
         g_stepOffset--;
@@ -276,6 +280,7 @@ namespace
       break;
     case kLaunchpadTopRowControlNoteMin + 3:
       // Step scrolling right
+      Serial.printf("go right");
       if ((g_stepOffset + 8) < kStepCount)
       {
         g_stepOffset++;
@@ -345,34 +350,23 @@ namespace
   {
     g_seenLaunchpadInput = true;
     Serial.printf("Launchpad note on ch=%u note=%u vel=%u\n", channel + 1, note, velocity);
-    if (isLaunchpadControlNote(note))
-    {
-      handleLaunchpadControl(note);
-      return;
-    }
-    if (isLaunchpadGridPad(note))
-    {
-      stageLaunchpadPad(channel, note, velocity, true);
-    }
+    stageLaunchpadPad(channel, note, velocity, true);
   }
 
   void onLaunchpadNoteOff(byte channel, byte note, byte velocity)
   {
     g_seenLaunchpadInput = true;
     Serial.printf("Launchpad note off ch=%u note=%u vel=%u\n", channel + 1, note, velocity);
-    if (isLaunchpadControlNote(note))
-    {
-      return;
-    }
-    if (isLaunchpadGridPad(note))
-    {
-      stageLaunchpadPad(channel, note, velocity, false);
-    }
+    stageLaunchpadPad(channel, note, velocity, false);
   }
 
   void onLaunchpadControlChange(byte channel, byte control, byte value)
   {
     Serial.printf("Launchpad  ch=%u control=%u val=%u\n", channel, control, value);
+     if (isLaunchpadControlNote(control))
+    {
+      handleLaunchpadControl(control);
+    }
     (void)channel;
     (void)control;
     (void)value;
