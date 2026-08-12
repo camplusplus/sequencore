@@ -75,7 +75,7 @@ namespace
 
   bool isLaunchpadGridPad(byte note)
   {
-    return note >= kLaunchpadGridNoteMin && note <= kLaunchpadGridNoteMax;
+    return note >= kLaunchpadGridNoteMin && note <= kLaunchpadGridNoteMax && !isLaunchpadControlNote(note);
   }
 
   bool isLaunchpadTopRowControlNote(byte note)
