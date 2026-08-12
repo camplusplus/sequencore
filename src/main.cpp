@@ -17,10 +17,10 @@ namespace
   constexpr uint8_t kMidiChannelCount = 16;
   constexpr uint8_t kLaunchpadGridNoteMin = 0;
   constexpr uint8_t kLaunchpadGridNoteMax = 63;
-  constexpr uint8_t kLaunchpadTopRowNoteMin = 104;
-  constexpr uint8_t kLaunchpadTopRowNoteMax = 111;
-  constexpr uint8_t kLaunchpadRightColumnNoteMin = 112;
-  constexpr uint8_t kLaunchpadRightColumnNoteMax = 119;
+  constexpr uint8_t kLaunchpadTopRowControlNoteMin = 91;
+  constexpr uint8_t kLaunchpadTopRowControlNoteMax = 98;
+  constexpr uint8_t kLaunchpadRightColumnControlNoteMin = 19;
+  constexpr uint8_t kLaunchpadRightColumnControlNoteMax = 89;
   constexpr uint16_t kMinTempoBpm = 60;
   constexpr uint16_t kMaxTempoBpm = 200;
   constexpr uint8_t kRatchetMax = 4;
@@ -39,10 +39,6 @@ namespace
   constexpr uint8_t kLaunchpadColorGreenLow = 16;
   constexpr uint8_t kLaunchpadColorGreenHigh = 18;
 
-  static const byte kUpperBlinkPads[3] = {104, 105, 106};
-  // CC numbers for top-row (91–98) and right-column (99–106) control buttons.
-  constexpr uint8_t kLaunchpadCcControlMin = 91;
-  constexpr uint8_t kLaunchpadCcControlMax = 106;
 
   struct StepLaneState
   {
@@ -73,7 +69,7 @@ namespace
   bool g_launchpadTestPatternSent = false;
   bool g_launchpadControlLedsInitialized = false;
   byte g_lastPressedControlNote = 0xFF; // 0xFF means no control button recently pressed
-  byte g_ccFlashNote = 0xFF;            // which CC-control note is currently flashing White
+  byte g_controlFlashNote = 0xFF;            // which control note is currently flashing White
 
   void refreshLaunchpadGridLedState();
   void refreshLaunchpadControlLedState();
@@ -83,20 +79,20 @@ namespace
     return note >= kLaunchpadGridNoteMin && note <= kLaunchpadGridNoteMax;
   }
 
-  bool isLaunchpadTopRowNote(byte note)
+  bool isLaunchpadTopRowControlNote(byte note)
   {
-    return note >= kLaunchpadTopRowNoteMin && note <= kLaunchpadTopRowNoteMax;
+    return note >= kLaunchpadTopRowControlNoteMin && note <= kLaunchpadTopRowControlNoteMax;
   }
 
-  bool isLaunchpadRightColumnNote(byte note)
+  bool isLaunchpadRightColumnControlNote(byte note)
   {
-    return note >= kLaunchpadRightColumnNoteMin && note <= kLaunchpadRightColumnNoteMax;
+    return note >= kLaunchpadRightColumnControlNoteMin && note <= kLaunchpadRightColumnControlNoteMax;
   }
 
   // Control buttons occupy top-row (104–111) and right-column (112–119).
   bool isLaunchpadControlNote(byte note)
   {
-    return note >= kLaunchpadTopRowNoteMin && note <= kLaunchpadRightColumnNoteMax;
+    return note >= kLaunchpadTopRowControlNoteMin && note <= kLaunchpadRightColumnControlNoteMax;
   }
 
   uint16_t calculateStepDurationMs()
@@ -195,113 +191,87 @@ namespace
   {
     for (uint8_t note = 0; note < 100; ++note)
     {
-      const uint8_t row = note / 7;
-      const uint8_t col = note % 7;
-      const uint8_t step = col;
-      const uint8_t channel = row;
-      const bool isCurrentStep = (step == (g_stepIndex % 7));
-      const bool isActiveLane = g_sequence[step][channel].active;
-
       uint8_t color = kLaunchpadColorOff;
-      // if (isCurrentStep && isActiveLane) {
       color = kLaunchpadColorWhiteHigh;
-      /*} else if (isCurrentStep) {
-        color = kLaunchpadColorWhiteLow;
-      } else if (isActiveLane) {
-        color = kLaunchpadColorAmberLow;
-      }*/
 
-      setLaunchpadLedColor(note, 18);
+      setLaunchpadLedColor(note, color);
     }
-  }
-
-  void testLaunchpadControlButtons()
-  {
-    for (uint8_t i = 0; i < 8; ++i)
-    {
-      setLaunchpadLedColor(kLaunchpadTopRowNoteMin + i, kLaunchpadColorWhiteHigh);
-    }
-    for (uint8_t i = 0; i < 8; ++i)
-    {
-      setLaunchpadLedColor(kLaunchpadRightColumnNoteMin + i, kLaunchpadColorAmberHigh);
-    }
-    delay(750);
   }
 
   void refreshLaunchpadControlLedState()
   {
     for (uint8_t i = 0; i < 8; ++i)
     {
-      setLaunchpadLedColor(kLaunchpadTopRowNoteMin + i, kLaunchpadColorOff);
+      setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + i, kLaunchpadColorOff);
     }
     for (uint8_t i = 0; i < 8; ++i)
     {
-      setLaunchpadLedColor(kLaunchpadRightColumnNoteMin + i, kLaunchpadColorOff);
+      setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + i, kLaunchpadColorOff);
     }
 
-    setLaunchpadLedColor(kLaunchpadTopRowNoteMin + 0, g_tempoBpm <= kMinTempoBpm ? kLaunchpadColorAmberLow : kLaunchpadColorWhiteLow);
-    setLaunchpadLedColor(kLaunchpadTopRowNoteMin + 1, g_tempoBpm >= kMaxTempoBpm ? kLaunchpadColorAmberLow : kLaunchpadColorWhiteLow);
-    setLaunchpadLedColor(kLaunchpadTopRowNoteMin + 2, g_microstepDivisions > 1 ? kLaunchpadColorAmberHigh : kLaunchpadColorOff);
-    setLaunchpadLedColor(kLaunchpadTopRowNoteMin + 3, g_swingPct < kSwingMax ? kLaunchpadColorAmberLow : kLaunchpadColorAmberHigh);
-    setLaunchpadLedColor(kLaunchpadTopRowNoteMin + 4, g_swingPct > 0 ? kLaunchpadColorAmberLow : kLaunchpadColorOff);
-    setLaunchpadLedColor(kLaunchpadTopRowNoteMin + 5, g_ratchetCount > 1 ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
-    setLaunchpadLedColor(kLaunchpadTopRowNoteMin + 6, g_ratchetCount > 1 ? kLaunchpadColorRedLow : kLaunchpadColorOff);
-    setLaunchpadLedColor(kLaunchpadTopRowNoteMin + 7, g_running ? kLaunchpadColorWhiteHigh : kLaunchpadColorRedHigh);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 0, g_tempoBpm <= kMinTempoBpm ? kLaunchpadColorAmberLow : kLaunchpadColorWhiteLow);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 1, g_tempoBpm >= kMaxTempoBpm ? kLaunchpadColorAmberLow : kLaunchpadColorWhiteLow);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 2, g_microstepDivisions > 1 ? kLaunchpadColorAmberHigh : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 3, g_swingPct < kSwingMax ? kLaunchpadColorAmberLow : kLaunchpadColorAmberHigh);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 4, g_swingPct > 0 ? kLaunchpadColorAmberLow : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 5, g_ratchetCount > 1 ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 6, g_ratchetCount > 1 ? kLaunchpadColorRedLow : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 7, g_running ? kLaunchpadColorWhiteHigh : kLaunchpadColorRedHigh);
 
-    setLaunchpadLedColor(kLaunchpadRightColumnNoteMin + 0, kLaunchpadColorRedHigh);
-    setLaunchpadLedColor(kLaunchpadRightColumnNoteMin + 1, kLaunchpadColorWhiteHigh);
-    setLaunchpadLedColor(kLaunchpadRightColumnNoteMin + 2, kLaunchpadColorBlueLow);
-    setLaunchpadLedColor(kLaunchpadRightColumnNoteMin + 3, kLaunchpadColorBlueLow);
-    setLaunchpadLedColor(kLaunchpadRightColumnNoteMin + 4, kLaunchpadColorAmberLow);
-    setLaunchpadLedColor(kLaunchpadRightColumnNoteMin + 5, kLaunchpadColorAmberLow);
-    setLaunchpadLedColor(kLaunchpadRightColumnNoteMin + 6, g_recording ? kLaunchpadColorRedHigh : kLaunchpadColorOff);
-    setLaunchpadLedColor(kLaunchpadRightColumnNoteMin + 7, g_overdub ? kLaunchpadColorBlueLow : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 0, kLaunchpadColorRedHigh);
+    setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 1, kLaunchpadColorWhiteHigh);
+    setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 2, kLaunchpadColorBlueLow);
+    setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 3, kLaunchpadColorBlueLow);
+    setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 4, kLaunchpadColorAmberLow);
+    setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 5, kLaunchpadColorAmberLow);
+    setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 6, g_recording ? kLaunchpadColorRedHigh : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 7, g_overdub ? kLaunchpadColorBlueLow : kLaunchpadColorOff);
   }
 
   void handleLaunchpadControl(byte note)
   {
     switch (note)
     {
-    case kLaunchpadTopRowNoteMin + 0:
+    case kLaunchpadTopRowControlNoteMin + 0:
       if (g_tempoBpm > kMinTempoBpm)
       {
         g_tempoBpm -= 10;
       }
       break;
-    case kLaunchpadTopRowNoteMin + 1:
+    case kLaunchpadTopRowControlNoteMin + 1:
       if (g_tempoBpm < kMaxTempoBpm)
       {
         g_tempoBpm += 10;
       }
       break;
-    case kLaunchpadTopRowNoteMin + 2:
+    case kLaunchpadTopRowControlNoteMin + 2:
       g_microstepDivisions = (g_microstepDivisions >= kMicrostepMax) ? 1 : (g_microstepDivisions * 2);
       break;
-    case kLaunchpadTopRowNoteMin + 3:
+    case kLaunchpadTopRowControlNoteMin + 3:
       if (g_swingPct < kSwingMax)
       {
         g_swingPct += 5;
       }
       break;
-    case kLaunchpadTopRowNoteMin + 4:
+    case kLaunchpadTopRowControlNoteMin + 4:
       if (g_swingPct > 0)
       {
         g_swingPct -= 5;
       }
       break;
-    case kLaunchpadTopRowNoteMin + 5:
+    case kLaunchpadTopRowControlNoteMin + 5:
       if (g_ratchetCount < kRatchetMax)
       {
         g_ratchetCount += 1;
       }
       break;
-    case kLaunchpadTopRowNoteMin + 6:
+    case kLaunchpadTopRowControlNoteMin + 6:
       if (g_ratchetCount > 1)
       {
         g_ratchetCount -= 1;
       }
       break;
-    case kLaunchpadTopRowNoteMin + 7:
+    case kLaunchpadTopRowControlNoteMin + 7:
       g_running = !g_running;
       if (g_running)
       {
@@ -312,31 +282,31 @@ namespace
         midiPort.sendStop();
       }
       break;
-    case kLaunchpadRightColumnNoteMin + 0:
+    case kLaunchpadRightColumnControlNoteMin + 0:
       g_running = false;
       midiPort.sendStop();
       break;
-    case kLaunchpadRightColumnNoteMin + 1:
+    case kLaunchpadRightColumnControlNoteMin + 1:
       g_running = true;
       midiPort.sendStart();
       break;
-    case kLaunchpadRightColumnNoteMin + 2:
+    case kLaunchpadRightColumnControlNoteMin + 2:
       memset(g_sequence, 0, sizeof(g_sequence));
       refreshLaunchpadGridLedState();
       break;
-    case kLaunchpadRightColumnNoteMin + 3:
+    case kLaunchpadRightColumnControlNoteMin + 3:
       g_stepIndex = 0;
       break;
-    case kLaunchpadRightColumnNoteMin + 4:
+    case kLaunchpadRightColumnControlNoteMin + 4:
       g_tempoBpm = 120;
       break;
-    case kLaunchpadRightColumnNoteMin + 5:
+    case kLaunchpadRightColumnControlNoteMin + 5:
       g_swingPct = 0;
       break;
-    case kLaunchpadRightColumnNoteMin + 6:
+    case kLaunchpadRightColumnControlNoteMin + 6:
       g_recording = !g_recording;
       break;
-    case kLaunchpadRightColumnNoteMin + 7:
+    case kLaunchpadRightColumnControlNoteMin + 7:
       g_overdub = !g_overdub;
       break;
     default:
@@ -507,7 +477,6 @@ void setup()
   delay(500);
   sendLaunchpadProgramMode();
   delay(250);
-  testLaunchpadControlButtons();
   refreshLaunchpadControlLedState();
   refreshLaunchpadGridLedState();
 
