@@ -179,6 +179,7 @@ namespace
 
   void recordCurrentStep(byte channel, byte note, byte velocity)
   {
+     Serial.printf("rec=%u, %u, %u \n", channel, note, velocity);
     if (!g_recording)
     {
       return;
@@ -252,106 +253,144 @@ namespace
     setLaunchpadLedColor(kLaunchpadRightColumnControlNoteMin + 70, g_overdub ? kLaunchpadColorBlueLow : kLaunchpadColorOff);
   }
 
-  void handleLaunchpadControl(byte note)
-  {
-    Serial.printf("handled");
-    switch (note)
-    {
-    case kLaunchpadTopRowControlNoteMin + 0:
-      // Channel scrolling up
-      if (g_channelOffset > 0)
-      {
-        g_channelOffset -= 8;
-      }
-      Serial.printf("go up=%u\n", g_channelOffset);
-      break;
-    case kLaunchpadTopRowControlNoteMin + 1:
-      // Channel scrolling down
-      if ((g_channelOffset + 8) < kMidiChannelCount)
-      {
-        g_channelOffset += 8;
-      }
-      Serial.printf("go down=%u\n", g_channelOffset);
-      break;
-    case kLaunchpadTopRowControlNoteMin + 2:
-      // Step scrolling left
-      if (g_stepOffset > 0)
-      {
-        g_stepOffset -= 8;
-      }
-      Serial.printf("go left=%u\n", g_stepOffset);
-      break;
-    case kLaunchpadTopRowControlNoteMin + 3:
-      // Step scrolling right
-      if ((g_stepOffset + 8) < kStepCount)
-      {
-        g_stepOffset += 8;
-      }
-      Serial.printf("go right=%u\n", g_stepOffset);
-      break;
-    case kLaunchpadTopRowControlNoteMin + 4:
-      if (g_tempoBpm > kMinTempoBpm)
-      {
-        g_tempoBpm -= 10;
-      }
-      Serial.printf("go g_tempoBpm=%u\n", g_tempoBpm );
-      break;
-    case kLaunchpadTopRowControlNoteMin + 5:
-      if (g_tempoBpm < kMaxTempoBpm)
-      {
-        g_tempoBpm += 10;
-      }
-      Serial.printf("go g_tempoBpm=%u\n", g_tempoBpm );
-      break;
-    case kLaunchpadTopRowControlNoteMin + 6:
-      g_microstepDivisions = (g_microstepDivisions >= kMicrostepMax) ? 1 : (g_microstepDivisions * 2);
-      Serial.printf("go g_microstepDivisions=%u\n", g_microstepDivisions );
-      break;
-    case kLaunchpadTopRowControlNoteMin + 7:
-      g_running = !g_running;
-      if (g_running)
-      {
-        midiPort.sendStart();
-      }
-      else
-      {
-        midiPort.sendStop();
-      }
-      Serial.printf("go g_running=%u\n", g_running );
-      break;
-    case kLaunchpadRightColumnControlNoteMin + 0:
-      g_running = false;
-      midiPort.sendStop();
-      break;
-    case kLaunchpadRightColumnControlNoteMin + 10:
-      g_running = true;
-      midiPort.sendStart();
-      break;
-    case kLaunchpadRightColumnControlNoteMin + 20:
-      memset(g_sequence, 0, sizeof(g_sequence));
-      refreshLaunchpadGridLedState();
-      break;
-    case kLaunchpadRightColumnControlNoteMin + 30:
-      g_stepIndex = 0;
-      break;
-    case kLaunchpadRightColumnControlNoteMin + 40:
-      g_tempoBpm = 120;
-      break;
-    case kLaunchpadRightColumnControlNoteMin + 50:
-      g_swingPct = 0;
-      break;
-    case kLaunchpadRightColumnControlNoteMin + 60:
-      g_recording = !g_recording;
-      break;
-    case kLaunchpadRightColumnControlNoteMin + 70:
-      g_overdub = !g_overdub;
-      break;
-    default:
-      break;
-    }
+   void playAllChannelSequence()
+   {
+     // Temporarily stop the sequencer
+     bool wasRunning = g_running;
+     g_running = false;
+     
+     // Play all steps in sequence
+     for (uint8_t step = 0; step < kStepCount; ++step)
+     {
+       // For each step, play notes from all channels
+       for (uint8_t channel = 0; channel < kMidiChannelCount; ++channel)
+       {
+         StepLaneState &lane = g_sequence[step][channel];
+         if (lane.active)
+         {
+           sendMidiMessage(channel, lane.note, lane.velocity, true);
+           Serial.printf("play=%u, %u, %u \n", channel, lane.note, lane.velocity);
+           delayMicroseconds(250); // Short delay between notes
+           sendMidiMessage(channel, lane.note, 0, false);
+         }
+       }
+       
+       // Delay between steps to maintain tempo
+       uint16_t stepDuration = calculateStepDurationMs();
+       delay(stepDuration);
+     }
+     
+     // Restore sequencer state
+     g_running = wasRunning;
+     if (g_running)
+     {
+       midiPort.sendStart();
+     }
+   }
 
-    refreshLaunchpadControlLedState();
-  }
+   void handleLaunchpadControl(byte note)
+   {
+     Serial.printf("handled");
+     switch (note)
+     {
+     case kLaunchpadTopRowControlNoteMin + 0:
+       // Channel scrolling up
+       if (g_channelOffset > 0)
+       {
+         g_channelOffset -= 8;
+       }
+       Serial.printf("go up=%u\n", g_channelOffset);
+       break;
+     case kLaunchpadTopRowControlNoteMin + 1:
+       // Channel scrolling down
+       if ((g_channelOffset + 8) < kMidiChannelCount)
+       {
+         g_channelOffset += 8;
+       }
+       Serial.printf("go down=%u\n", g_channelOffset);
+       break;
+     case kLaunchpadTopRowControlNoteMin + 2:
+       // Step scrolling left
+       if (g_stepOffset > 0)
+       {
+         g_stepOffset -= 8;
+       }
+       Serial.printf("go left=%u\n", g_stepOffset);
+       break;
+     case kLaunchpadTopRowControlNoteMin + 3:
+       // Step scrolling right
+       if ((g_stepOffset + 8) < kStepCount)
+       {
+         g_stepOffset += 8;
+       }
+       Serial.printf("go right=%u\n", g_stepOffset);
+       break;
+     case kLaunchpadTopRowControlNoteMin + 4:
+       if (g_tempoBpm > kMinTempoBpm)
+       {
+         g_tempoBpm -= 10;
+       }
+       Serial.printf("go g_tempoBpm=%u\n", g_tempoBpm );
+       break;
+     case kLaunchpadTopRowControlNoteMin + 5:
+       if (g_tempoBpm < kMaxTempoBpm)
+       {
+         g_tempoBpm += 10;
+       }
+       Serial.printf("go g_tempoBpm=%u\n", g_tempoBpm );
+       break;
+     case kLaunchpadTopRowControlNoteMin + 6:
+       g_microstepDivisions = (g_microstepDivisions >= kMicrostepMax) ? 1 : (g_microstepDivisions * 2);
+       Serial.printf("go g_microstepDivisions=%u\n", g_microstepDivisions );
+       break;
+     case kLaunchpadTopRowControlNoteMin + 7:
+       g_running = !g_running;
+       if (g_running)
+       {
+         midiPort.sendStart();
+       }
+       else
+       {
+         midiPort.sendStop();
+       }
+       Serial.printf("go g_running=%u\n", g_running );
+       break;
+     case kLaunchpadTopRowControlNoteMin + 8: // Note 98 - play all channel sequence
+       playAllChannelSequence();
+       break;
+     case kLaunchpadRightColumnControlNoteMin + 0:
+       g_running = false;
+       midiPort.sendStop();
+       break;
+     case kLaunchpadRightColumnControlNoteMin + 10:
+       g_running = true;
+       midiPort.sendStart();
+       break;
+     case kLaunchpadRightColumnControlNoteMin + 20:
+       memset(g_sequence, 0, sizeof(g_sequence));
+       refreshLaunchpadGridLedState();
+       break;
+     case kLaunchpadRightColumnControlNoteMin + 30:
+       g_stepIndex = 0;
+       break;
+     case kLaunchpadRightColumnControlNoteMin + 40:
+       g_tempoBpm = 120;
+       break;
+     case kLaunchpadRightColumnControlNoteMin + 50:
+       g_swingPct = 0;
+       break;
+     case kLaunchpadRightColumnControlNoteMin + 60:
+       g_recording = !g_recording;
+       break;
+     case kLaunchpadRightColumnControlNoteMin + 70:
+       g_overdub = !g_overdub;
+       break;
+     default:
+       break;
+     }
+
+     refreshLaunchpadControlLedState();
+   }
 
   void onLaunchpadNoteOn(byte channel, byte note, byte velocity)
   {
