@@ -113,22 +113,35 @@ namespace
     return static_cast<uint16_t>(60000.0f / static_cast<float>(g_tempoBpm) / 24.0f);
   }
 
-  void sendMidiMessage(byte channel, byte note, byte velocity, bool noteOn)
+  void sendMidiMessage(
+      byte channel,
+      byte note,
+      byte velocity,
+      bool noteOn)
   {
-    // Internal sequencer uses 0..15.
-    // MIDI library uses 1..16.
-    if (channel >= kMidiChannelCount)
+    if (channel >= 16)
     {
-      channel = 0;
+      return;
     }
 
+    // Internal = 0..15
+    // MIDI = 1..16
     const byte midiChannel = channel + 1;
 
-    midiPort.send(
-        noteOn ? midi::NoteOn : midi::NoteOff,
-        note,
-        velocity,
-        midiChannel);
+    if (noteOn)
+    {
+      midiPort.sendNoteOn(
+          note,
+          velocity,
+          midiChannel);
+    }
+    else
+    {
+      midiPort.sendNoteOff(
+          note,
+          velocity,
+          midiChannel);
+    }
   }
 
   void sendStepClockPulse()
@@ -186,10 +199,17 @@ namespace
     }
   }
 
-  void recordCurrentStep(byte channel, byte note, byte velocity)
+  void recordCurrentStep(uint8_t channel, byte note, byte velocity)
   {
-    Serial.printf("rec=%u, %u, %u \n", channel, note, velocity);
-    if (!g_recording)
+    // Internal channels are 0..15.
+    if (channel >= kMidiChannelCount)
+    {
+      return;
+    }
+
+    // We only record NoteOn.
+    // NoteOff must not erase the recorded step.
+    if (velocity == 0)
     {
       return;
     }
@@ -200,9 +220,19 @@ namespace
     }
 
     StepLaneState &lane = g_sequence[g_stepIndex][channel];
-    lane.active = (velocity > 0);
+
+    lane.active = true;
     lane.note = note;
     lane.velocity = velocity;
+
+    Serial.printf(
+        "RECORDED step=%u MIDI_CH=%u note=%u vel=%u\n",
+        g_stepIndex,
+        channel + 1,
+        note,
+        velocity);
+
+    refreshLaunchpadGridLedState();
   }
 
   void refreshLaunchpadGridLedState()
@@ -416,157 +446,203 @@ namespace
 
   void onLaunchpadControlChange(byte channel, byte control, byte value)
   {
-    Serial.printf("Launchpad  ch=%u control=%u val=%u\n", channel, control, value);
-    if (value && isLaunchpadControlNote(control))
-    {
-      // Check if this is a right-column control note for recording
-      if (isLaunchpadRightColumnControlNote(control))
-      {
-        // Map specific control notes to MIDI channels
-        // 89 no offset -> channel 1, 79 no offset -> channel 2, ..., 19 no offset -> channel 8, 89 + offset -> channel 9 ... 19 + offset -> channel 16
-        // The control notes are: 89, 79, 69, 59, 49, 39, 29, 19 (every 10 notes)
-        uint8_t channelNumber = (kLaunchpadRightColumnControlNoteMax - control) / 10 + 1;
-        g_recordingChannelOffset = channelNumber - 1; // Zero-based indexing
+    Serial.printf(
+        "Launchpad CC ch=%u control=%u value=%u\n",
+        channel,
+        control,
+        value);
 
-        // Set recording state for this channel
+    // --------------------------------------------------
+    // RIGHT COLUMN = SELECT MIDI RECORDING CHANNEL
+    // --------------------------------------------------
+
+    if (isLaunchpadRightColumnControlNote(control))
+    {
+      if (value > 0)
+      {
+        // 89 -> channel 1
+        // 79 -> channel 2
+        // 69 -> channel 3
+        // ...
+        // 19 -> channel 8
+        //
+        // If you later add an offset, this remains 0..15.
+
+        uint8_t channelNumber =
+            (kLaunchpadRightColumnControlNoteMax - control) / 10 + 1;
+
+        g_recordingChannelOffset = channelNumber - 1;
+
+        // Holding this button means RECORD.
         g_recordingHeldNote = true;
+        g_recording = true;
 
-        Serial.printf("Recording on channel %u (offset %u)\n", channelNumber, g_recordingChannelOffset);
+        Serial.printf(
+            "RECORD START: MIDI channel %u\n",
+            channelNumber);
+
+        refreshLaunchpadControlLedState();
+        return;
       }
-      else
+
+      // ------------------------------------------------
+      // RELEASE RECORD CHANNEL BUTTON
+      // ------------------------------------------------
+
+      if (value == 0 && g_recordingHeldNote)
       {
-        handleLaunchpadControl(control);
+        g_recordingHeldNote = false;
+        g_recording = false;
+
+        Serial.printf(
+            "RECORD STOP: MIDI channel %u\n",
+            g_recordingChannelOffset + 1);
+
+        // Make sure sequencer is running after recording.
+        if (!g_running)
+        {
+          g_running = true;
+          g_stepTimer = 0;
+          g_clockPulseTimer = 0;
+
+          midiPort.sendStart();
+
+          Serial.println("PLAYBACK START");
+        }
+
+        refreshLaunchpadControlLedState();
+        return;
       }
     }
-    else if (!value && isLaunchpadRightColumnControlNote(control) && g_recordingHeldNote)
+
+    // --------------------------------------------------
+    // OTHER CONTROL BUTTONS
+    // --------------------------------------------------
+
+    if (value)
     {
-      // Stop recording when releasing the right-column control note
-      g_recordingHeldNote = false;
-      Serial.printf("Stopped recording\n");
+      handleLaunchpadControl(control);
     }
+
     (void)channel;
-    (void)control;
-    (void)value;
   }
 
   void handleHardwareMidiIn()
   {
-    const auto type = midiPort.getType();
-    const auto channel = midiPort.getChannel();
-    const auto data1 = midiPort.getData1();
-    const auto data2 = midiPort.getData2();
+    const byte type = midiPort.getType();
+    const byte channel = midiPort.getChannel();
+    const byte data1 = midiPort.getData1();
+    const byte data2 = midiPort.getData2();
 
     Serial.printf(
-        "HW MIDI IN type=%u ch=%u data1=%u data2=%u\n",
+        "HW MIDI type=%u ch=%u note=%u vel=%u\n",
         type,
         channel,
         data1,
         data2);
 
-    // MIDI library channel is 1..16.
-    // Convert to our internal 0..15 representation.
-    const uint8_t internalChannel =
-        (channel >= 1 && channel <= 16) ? (channel - 1) : 0;
-
-    if (g_recordingHeldNote)
+    // We only record MIDI notes while holding
+    // a Launchpad recording-channel button.
+    if (!g_recordingHeldNote)
     {
-      // g_recordingChannelOffset is already 0..15.
-      const uint8_t actualChannel = g_recordingChannelOffset;
-
-      if (type == midi::NoteOn && data2 > 0)
-      {
-        Serial.printf(
-            "REC NoteOn MIDI ch=%u note=%u vel=%u -> lane %u\n",
-            channel,
-            data1,
-            data2,
-            actualChannel);
-
-        recordCurrentStep(actualChannel, data1, data2);
-      }
-      else if (type == midi::NoteOff ||
-               (type == midi::NoteOn && data2 == 0))
-      {
-        Serial.printf(
-            "REC NoteOff MIDI ch=%u note=%u -> lane %u\n",
-            channel,
-            data1,
-            actualChannel);
-
-        recordCurrentStep(actualChannel, data1, 0);
-      }
-    }
-    else if (g_recording)
-    {
-      if (type == midi::NoteOn && data2 > 0)
-      {
-        Serial.printf(
-            "REC NoteOn ch=%u note=%u vel=%u -> lane %u\n",
-            channel,
-            data1,
-            data2,
-            internalChannel);
-
-        recordCurrentStep(internalChannel, data1, data2);
-      }
-      else if (type == midi::NoteOff ||
-               (type == midi::NoteOn && data2 == 0))
-      {
-        Serial.printf(
-            "REC NoteOff ch=%u note=%u -> lane %u\n",
-            channel,
-            data1,
-            internalChannel);
-
-        recordCurrentStep(internalChannel, data1, 0);
-      }
+      return;
     }
 
-    // Debug
+    // --------------------------------------------------
+    // NOTE ON
+    // --------------------------------------------------
+
     if (type == midi::NoteOn && data2 > 0)
     {
+      const uint8_t recordChannel = g_recordingChannelOffset;
+
       Serial.printf(
-          "HW MIDI IN: NoteOn ch=%u note=%u vel=%u\n",
-          channel,
+          "RECORD -> MIDI CH %u  note=%u velocity=%u step=%u\n",
+          recordChannel + 1,
+          data1,
+          data2,
+          g_stepIndex);
+
+      recordCurrentStep(
+          recordChannel,
           data1,
           data2);
+
+      return;
     }
-    else if (type == midi::NoteOff ||
-             (type == midi::NoteOn && data2 == 0))
+
+    // --------------------------------------------------
+    // NOTE OFF
+    // --------------------------------------------------
+
+    if (type == midi::NoteOff ||
+        (type == midi::NoteOn && data2 == 0))
     {
+      // DO NOT modify the sequence here.
       Serial.printf(
-          "HW MIDI IN: NoteOff ch=%u note=%u\n",
+          "Keyboard NoteOff ch=%u note=%u\n",
           channel,
           data1);
+
+      return;
     }
   }
 
   void sendActiveStepNotes(uint8_t step)
   {
-    for (uint8_t channel = 0; channel < kMidiChannelCount; ++channel)
+    for (uint8_t channel = 0;
+         channel < kMidiChannelCount;
+         ++channel)
     {
       StepLaneState &lane = g_sequence[step][channel];
+
       if (!lane.active)
       {
         continue;
       }
 
-      const uint16_t swingDelayUs = (step % 2 == 1 && g_swingPct > 0)
-                                        ? (calculateStepDurationMs() * g_swingPct / 100U) * 1000U / 2U
-                                        : 0;
+      Serial.printf(
+          "PLAY step=%u MIDI_CH=%u note=%u vel=%u\n",
+          step,
+          channel + 1,
+          lane.note,
+          lane.velocity);
+
+      const uint16_t swingDelayUs =
+          (step % 2 == 1 && g_swingPct > 0)
+              ? (calculateStepDurationMs() * g_swingPct / 100U) * 1000U / 2U
+              : 0;
+
       if (swingDelayUs > 0)
       {
         delayMicroseconds(swingDelayUs);
       }
 
-      for (uint8_t ratchet = 0; ratchet < g_ratchetCount; ++ratchet)
+      for (uint8_t ratchet = 0;
+           ratchet < g_ratchetCount;
+           ++ratchet)
       {
-        sendMidiMessage(channel, lane.note, lane.velocity, true);
+        sendMidiMessage(
+            channel,
+            lane.note,
+            lane.velocity,
+            true);
+
         delayMicroseconds(250);
-        sendMidiMessage(channel, lane.note, 0, false);
+
+        sendMidiMessage(
+            channel,
+            lane.note,
+            0,
+            false);
+
         if (ratchet + 1 < g_ratchetCount)
         {
-          delayMicroseconds(static_cast<uint32_t>(calculateStepDurationMs()) * 1000U / g_ratchetCount);
+          delayMicroseconds(
+              static_cast<uint32_t>(
+                  calculateStepDurationMs()) *
+              1000U /
+              g_ratchetCount);
         }
       }
     }
@@ -618,15 +694,13 @@ void setup()
   digitalWriteFast(LED_BUILTIN, LOW);
 
   Serial.begin(115200);
+
   while (!Serial && millis() < 1000)
   {
     ;
   }
 
-  Serial1.begin(31250);
-  // Initialize hardware DIN MIDI.
-  // MIDI library channels are 1..16.
-  // OMNI makes MIDI.read() accept input from all channels.
+  // Hardware DIN MIDI
   midiPort.begin(MIDI_CHANNEL_OMNI);
 
   launchpad.setHandleNoteOn(onLaunchpadNoteOn);
@@ -636,13 +710,15 @@ void setup()
   myusb.begin();
 
   delay(500);
+
   sendLaunchpadProgramMode();
+
   delay(250);
+
   refreshLaunchpadControlLedState();
   refreshLaunchpadGridLedState();
 
-  Serial.println("Launchpad USB host + 16-channel MIDI ready");
-  Serial.println("Waiting for Launchpad X on the Teensy USB host port...");
+  Serial.println("Launchpad USB host + hardware MIDI ready");
 }
 
 void loop()
@@ -650,41 +726,39 @@ void loop()
   myusb.Task();
   launchpad.read();
 
-  // Hardware DIN MIDI IN on Serial1 RX pin 0.
-  // while (midiPort.read())
+  // Process all pending hardware MIDI messages.
   if (midiPort.read())
   {
     handleHardwareMidiIn();
   }
 
-  // Test OUT
-  // midiPort.sendNoteOn(60, 127, 1);
-  // Serial.println("NOTE ON  ch=1 note=60 vel=127");
-  // delay(500);
-  // midiPort.sendNoteOff(60, 0, 1);
-  // Serial.println("NOTE OFF ch=1 note=60");
-  // delay(500);
-
   refreshLaunchpadControlLedState();
 
-  if (g_running && g_clockPulseTimer >= calculateClockPulseMs())
+  if (g_running &&
+      g_clockPulseTimer >= calculateClockPulseMs())
   {
     g_clockPulseTimer = 0;
     sendStepClockPulse();
   }
 
-  if (g_running && g_stepTimer >= calculateStepDurationMs())
+  if (g_running &&
+      g_stepTimer >= calculateStepDurationMs())
   {
     g_stepTimer = 0;
+
     advanceSequencerStep();
+
     debugPrintState();
+
     refreshLaunchpadGridLedState();
   }
 
   if (g_ledTimer >= 250)
   {
     g_ledTimer = 0;
-    digitalWriteFast(LED_BUILTIN, !digitalReadFast(LED_BUILTIN));
+    digitalWriteFast(
+        LED_BUILTIN,
+        !digitalReadFast(LED_BUILTIN));
   }
 
   if (g_statusTimer >= 1000)
@@ -693,7 +767,8 @@ void loop()
 
     if (!g_seenLaunchpadInput)
     {
-      // Serial.println("USB host task running; no Launchpad input seen yet");
+      Serial.println(
+          "USB host task running; no Launchpad input seen yet");
     }
   }
 }
