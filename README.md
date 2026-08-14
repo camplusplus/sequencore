@@ -8,11 +8,12 @@ Progress:
 - Lights and color of buttons mapped
 - Scroll upper, lower midi channels mapped
 - Scroll left, right note steps mapped
+- MIDI record sequence (press right column control buttons to record/overdub)
 
 Todo:
-- MIDI record sequence (idea - press right column to record/overdub, auto discovery of length)
 - Set Tempo, quantization, Functions for rest control buttons
 - MIDI playback sequence (mute channel?)
+- auto discovery of sequence length
 - Microsteps 
 
 Flashing the Teensy
