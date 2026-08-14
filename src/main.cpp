@@ -13,6 +13,7 @@ MIDIDevice_BigBuffer launchpad(myusb);
 
 namespace
 {
+  //todo increase this with modifier
   constexpr uint8_t kStepCount = 16;
   constexpr uint8_t kMidiChannelCount = 16;
   uint8_t g_stepOffset = 0;    // For scrolling steps left/right
@@ -59,19 +60,21 @@ namespace
   uint8_t g_ratchetCount = 1;
   uint8_t g_swingPct = 0;
   bool g_running = true;
-  bool g_recording = false;
-  bool g_overdub = false;
-  elapsedMillis g_stepTimer;
-  elapsedMillis g_clockPulseTimer;
-  elapsedMillis g_ledTimer;
-  elapsedMillis g_statusTimer;
-  elapsedMillis g_launchpadInitTimer;
-  bool g_seenLaunchpadInput = false;
-  bool g_launchpadProgramModeSent = false;
-  bool g_launchpadTestPatternSent = false;
-  bool g_launchpadControlLedsInitialized = false;
-  byte g_lastPressedControlNote = 0xFF; // 0xFF means no control button recently pressed
-  byte g_controlFlashNote = 0xFF;       // which control note is currently flashing White
+   bool g_recording = false;
+   bool g_overdub = false;
+   bool g_recordingHeldNote = false;      // Flag for recording when holding right-column control note
+   uint8_t g_recordingChannelOffset = 0;  // Channel offset for recording
+   elapsedMillis g_stepTimer;
+   elapsedMillis g_clockPulseTimer;
+   elapsedMillis g_ledTimer;
+   elapsedMillis g_statusTimer;
+   elapsedMillis g_launchpadInitTimer;
+   bool g_seenLaunchpadInput = false;
+   bool g_launchpadProgramModeSent = false;
+   bool g_launchpadTestPatternSent = false;
+   bool g_launchpadControlLedsInitialized = false;
+   byte g_lastPressedControlNote = 0xFF; // 0xFF means no control button recently pressed
+   byte g_controlFlashNote = 0xFF;       // which control note is currently flashing White
 
   void refreshLaunchpadGridLedState();
   void refreshLaunchpadControlLedState();
@@ -369,7 +372,28 @@ namespace
     Serial.printf("Launchpad  ch=%u control=%u val=%u\n", channel, control, value);
     if (value && isLaunchpadControlNote(control))
     {
-      handleLaunchpadControl(control);
+      // Check if this is a right-column control note for recording
+      if (isLaunchpadRightColumnControlNote(control))
+      {
+        // Calculate the MIDI channel based on the row position
+        uint8_t row = (control - kLaunchpadRightColumnControlNoteMin) / 10;
+        g_recordingChannelOffset = row;
+        
+        // Set recording state for this channel
+        g_recordingHeldNote = true;
+        
+        Serial.printf("Recording on row %u (channel offset %u)\n", row, g_recordingChannelOffset);
+      }
+      else
+      {
+        handleLaunchpadControl(control);
+      }
+    }
+    else if (!value && isLaunchpadRightColumnControlNote(control) && g_recordingHeldNote)
+    {
+      // Stop recording when releasing the right-column control note
+      g_recordingHeldNote = false;
+      Serial.printf("Stopped recording\n");
     }
     (void)channel;
     (void)control;
@@ -383,8 +407,28 @@ namespace
     const auto data1 = midiPort.getData1();
     const auto data2 = midiPort.getData2();
 
-    if (g_recording)
+    // Handle recording when holding right-column control note
+    if (g_recordingHeldNote)
     {
+      // Calculate the actual MIDI channel based on the row position and offset
+      uint8_t actualChannel = (g_recordingChannelOffset + g_channelOffset) % kMidiChannelCount;
+      if (actualChannel == 0)
+      {
+        actualChannel = 1; // MIDI channels are 1-16, not 0-15
+      }
+      
+      if (type == midi::NoteOn)
+      {
+        recordCurrentStep(actualChannel, data1, data2);
+      }
+      else if (type == midi::NoteOff)
+      {
+        recordCurrentStep(actualChannel, data1, 0);
+      }
+    }
+    else if (g_recording)
+    {
+      // Regular recording mode
       if (type == midi::NoteOn)
       {
         recordCurrentStep(channel, data1, data2);
@@ -511,34 +555,35 @@ void loop()
 {
   myusb.Task();
   launchpad.read();
+  
+  // Handle MIDI input
+  if (midiPort.read()) {
+    handleHardwareMidiIn();
+  }
+
   refreshLaunchpadControlLedState();
-  /*
-    if (midiPort.read()) {
-      handleHardwareMidiIn();
-    }
+  
+  if (g_running && g_clockPulseTimer >= calculateClockPulseMs()) {
+    g_clockPulseTimer = 0;
+    sendStepClockPulse();
+  }
 
-    if (g_running && g_clockPulseTimer >= calculateClockPulseMs()) {
-      g_clockPulseTimer = 0;
-      sendStepClockPulse();
-    }
+  if (g_running && g_stepTimer >= calculateStepDurationMs()) {
+    g_stepTimer = 0;
+    advanceSequencerStep();
+    debugPrintState();
+    refreshLaunchpadGridLedState();
+  }
 
-    if (g_running && g_stepTimer >= calculateStepDurationMs()) {
-      g_stepTimer = 0;
-      advanceSequencerStep();
-      debugPrintState();
-      refreshLaunchpadGridLedState();
-    }
+  if (g_ledTimer >= 250) {
+    g_ledTimer = 0;
+    digitalWriteFast(LED_BUILTIN, !digitalReadFast(LED_BUILTIN));
+  }
 
-    if (g_ledTimer >= 250) {
-      g_ledTimer = 0;
-      digitalWriteFast(LED_BUILTIN, !digitalReadFast(LED_BUILTIN));
+  if (g_statusTimer >= 1000) {
+    g_statusTimer = 0;
+    if (!g_seenLaunchpadInput) {
+      Serial.println("USB host task running; no Launchpad input seen yet");
     }
-
-    if (g_statusTimer >= 1000) {
-      g_statusTimer = 0;
-      if (!g_seenLaunchpadInput) {
-        Serial.println("USB host task running; no Launchpad input seen yet");
-      }
-    }
-      */
+  }
 }
