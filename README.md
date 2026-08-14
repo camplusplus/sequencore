@@ -2,7 +2,18 @@ Teensy 4.1 as headless sequencer, Launchpad X as the sequencer controller, and M
 
 <img width="961" height="1280" alt="17867357828422494826715409083845" src="https://github.com/user-attachments/assets/b23e96f6-c196-454c-96cf-b7f39c36b469" />
 
+Progress:
+- All grid buttons mapped
+- All Control Buttons mapped
+- Lights and color of buttons mapped
+- Scroll upper, lower midi channels mapped
+- Scroll left, right note steps mapped
 
+Todo:
+- MIDI record sequence (idea - press right column to record/overdub, auto discovery of length)
+- Set Tempo, quantization, Functions for rest control buttons
+- MIDI playback sequence (mute channel?)
+- Microsteps 
 
 Flashing the Teensy
 Use the Teensy’s programming USB connector only to upload firmware.
