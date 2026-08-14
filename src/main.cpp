@@ -278,7 +278,7 @@ namespace
         if (/*true ||*/ lane.active)
         {
           sendMidiMessage(channel, lane.note, lane.velocity, true);
-          //sendMidiMessage(1, 60, 127, true);
+          // sendMidiMessage(1, 60, 127, true);
           Serial.printf("play=%u, %u, %u \n", channel, lane.note, lane.velocity);
           delayMicroseconds(250); // Short delay between notes
           sendMidiMessage(channel, lane.note, 0, false);
@@ -651,15 +651,20 @@ void loop()
   launchpad.read();
 
   // Hardware DIN MIDI IN on Serial1 RX pin 0.
-  //while (midiPort.read())
-  //if (midiPort.read())
-  //{
+  // while (midiPort.read())
+  if (midiPort.read())
+  {
     handleHardwareMidiIn();
-  //}
-          sendMidiMessage(1, 60, 127, true);
-          delayMicroseconds(250); // Short delay between notes
+  }
 
-          
+  // Test OUT
+  // midiPort.sendNoteOn(60, 127, 1);
+  // Serial.println("NOTE ON  ch=1 note=60 vel=127");
+  // delay(500);
+  // midiPort.sendNoteOff(60, 0, 1);
+  // Serial.println("NOTE OFF ch=1 note=60");
+  // delay(500);
+
   refreshLaunchpadControlLedState();
 
   if (g_running && g_clockPulseTimer >= calculateClockPulseMs())
@@ -688,7 +693,7 @@ void loop()
 
     if (!g_seenLaunchpadInput)
     {
-     // Serial.println("USB host task running; no Launchpad input seen yet");
+      // Serial.println("USB host task running; no Launchpad input seen yet");
     }
   }
 }
