@@ -266,9 +266,10 @@ namespace
        for (uint8_t channel = 0; channel < kMidiChannelCount; ++channel)
        {
          StepLaneState &lane = g_sequence[step][channel];
-         if (lane.active)
+         if (/*true ||*/ lane.active)
          {
            sendMidiMessage(channel, lane.note, lane.velocity, true);
+       //    sendMidiMessage(1, 60, 127, true);
            Serial.printf("play=%u, %u, %u \n", channel, lane.note, lane.velocity);
            delayMicroseconds(250); // Short delay between notes
            sendMidiMessage(channel, lane.note, 0, false);
@@ -343,20 +344,18 @@ namespace
        g_microstepDivisions = (g_microstepDivisions >= kMicrostepMax) ? 1 : (g_microstepDivisions * 2);
        Serial.printf("go g_microstepDivisions=%u\n", g_microstepDivisions );
        break;
-     case kLaunchpadTopRowControlNoteMin + 7:
-       g_running = !g_running;
+     case kLaunchpadTopRowControlNoteMin + 7: // Note 97 - play all channel sequence, note 98 is just light, no pad
+      g_running = !g_running;
        if (g_running)
        {
          midiPort.sendStart();
+         playAllChannelSequence();
        }
        else
        {
          midiPort.sendStop();
        }
        Serial.printf("go g_running=%u\n", g_running );
-       break;
-     case kLaunchpadTopRowControlNoteMin + 8: // Note 98 - play all channel sequence
-       playAllChannelSequence();
        break;
      case kLaunchpadRightColumnControlNoteMin + 0:
        g_running = false;
