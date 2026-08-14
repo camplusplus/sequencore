@@ -1,6 +1,7 @@
 Teensy 4.1 as headless sequencer, Launchpad X as the sequencer controller, and MIDI DIN/DOUT to your instruments 
 
-<img width="960" height="960" alt="image" src="https://github.com/user-attachments/assets/140697f5-9226-40e7-b805-896ed53aa945" />
+<img width="961" height="1280" alt="17867357828422494826715409083845" src="https://github.com/user-attachments/assets/b23e96f6-c196-454c-96cf-b7f39c36b469" />
+
 
 
 Flashing the Teensy
