@@ -414,14 +414,16 @@ namespace
       // Check if this is a right-column control note for recording
       if (isLaunchpadRightColumnControlNote(control))
       {
-        // Calculate the MIDI channel based on the row position
-        uint8_t row = (control - kLaunchpadRightColumnControlNoteMin) / 10;
-        g_recordingChannelOffset = row;
+        // Map specific control notes to MIDI channels
+        // 89 no offset -> channel 1, 79 no offset -> channel 2, ..., 19 no offset -> channel 8, 89 + offset -> channel 9 ... 19 + offset -> channel 16
+        // The control notes are: 89, 79, 69, 59, 49, 39, 29, 19 (every 10 notes)
+        uint8_t channelNumber = (kLaunchpadRightColumnControlNoteMax - control) / 10 + 1;
+        g_recordingChannelOffset = channelNumber - 1; // Zero-based indexing
         
         // Set recording state for this channel
         g_recordingHeldNote = true;
         
-        Serial.printf("Recording on row %u (channel offset %u)\n", row, g_recordingChannelOffset);
+        Serial.printf("Recording on channel %u (offset %u)\n", channelNumber, g_recordingChannelOffset);
       }
       else
       {
@@ -439,54 +441,58 @@ namespace
     (void)value;
   }
 
-  void handleHardwareMidiIn()
-  {
-    const auto type = midiPort.getType();
-    const auto channel = midiPort.getChannel();
-    const auto data1 = midiPort.getData1();
-    const auto data2 = midiPort.getData2();
+void handleHardwareMidiIn()
+    {
+      const auto type = midiPort.getType();
+      const auto channel = midiPort.getChannel();
+      const auto data1 = midiPort.getData1();
+      const auto data2 = midiPort.getData2();
 
-    // Handle recording when holding right-column control note
-    if (g_recordingHeldNote)
-    {
-      // Calculate the actual MIDI channel based on the row position and offset
-      uint8_t actualChannel = (g_recordingChannelOffset + g_channelOffset) % kMidiChannelCount;
-      if (actualChannel == 0)
-      {
-        actualChannel = 1; // MIDI channels are 1-16, not 0-15
-      }
-      
-      if (type == midi::NoteOn)
-      {
-        recordCurrentStep(actualChannel, data1, data2);
-      }
-      else if (type == midi::NoteOff)
-      {
-        recordCurrentStep(actualChannel, data1, 0);
-      }
-    }
-    else if (g_recording)
-    {
-      // Regular recording mode
-      if (type == midi::NoteOn)
-      {
-        recordCurrentStep(channel, data1, data2);
-      }
-      else if (type == midi::NoteOff)
-      {
-        recordCurrentStep(channel, data1, 0);
-      }
-    }
+      // Debug: Print all incoming MIDI messages
+      Serial.printf("HW MIDI IN type=%u ch=%u data1=%u data2=%u\n", type, channel + 1, data1, data2);
 
-    if (type == midi::NoteOn && data2 > 0)
-    {
-      Serial.printf("HW MIDI IN ch=%u note=%u vel=%u\n", channel + 1, data1, data2);
+      // Handle recording when holding right-column control note
+      if (g_recordingHeldNote)
+      {
+        // Calculate the actual MIDI channel based on the row position and offset
+        uint8_t actualChannel = g_recordingChannelOffset + 1; // Convert zero-based to 1-based MIDI channel
+        
+        if (type == midi::NoteOn)
+        {
+          Serial.printf("Recording NoteOn ch=%u note=%u vel=%u to channel %u\n", channel + 1, data1, data2, actualChannel);
+          recordCurrentStep(actualChannel, data1, data2);
+        }
+        else if (type == midi::NoteOff)
+        {
+          Serial.printf("Recording NoteOff ch=%u note=%u to channel %u\n", channel + 1, data1, actualChannel);
+          recordCurrentStep(actualChannel, data1, 0);
+        }
+      }
+      else if (g_recording)
+      {
+        // Regular recording mode
+        if (type == midi::NoteOn)
+        {
+          Serial.printf("Recording NoteOn ch=%u note=%u vel=%u to channel %u\n", channel + 1, data1, data2, channel + 1);
+          recordCurrentStep(channel, data1, data2);
+        }
+        else if (type == midi::NoteOff)
+        {
+          Serial.printf("Recording NoteOff ch=%u note=%u to channel %u\n", channel + 1, data1, channel + 1);
+          recordCurrentStep(channel, data1, 0);
+        }
+      }
+
+      // Always print hardware MIDI input for debugging
+      if (type == midi::NoteOn && data2 > 0)
+      {
+        Serial.printf("HW MIDI IN NoteOn ch=%u note=%u vel=%u\n", channel + 1, data1, data2);
+      }
+      else if (type == midi::NoteOff || (type == midi::NoteOn && data2 == 0))
+      {
+        Serial.printf("HW MIDI IN NoteOff ch=%u note=%u\n", channel + 1, data1);
+      }
     }
-    else if (type == midi::NoteOff || (type == midi::NoteOn && data2 == 0))
-    {
-      Serial.printf("HW MIDI IN ch=%u note=%u off\n", channel + 1, data1);
-    }
-  }
 
   void sendActiveStepNotes(uint8_t step)
   {
@@ -594,7 +600,6 @@ void loop()
 {
   myusb.Task();
   launchpad.read();
-  
   // Handle MIDI input
   if (midiPort.read()) {
     handleHardwareMidiIn();
