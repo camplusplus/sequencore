@@ -3,7 +3,7 @@ Teensy 4.1 as headless sequencer, Launchpad X as the sequencer controller, and M
 <img width="961" height="1280" alt="17867357828422494826715409083845" src="https://github.com/user-attachments/assets/b23e96f6-c196-454c-96cf-b7f39c36b469" />
 
 https://youtube.com/shorts/Y_C1o1M-Pfo
-
+[![Watch Short](https://img.youtube.com/vi/Y_C1o1M-Pfo/maxresdefault.jpg)](https://www.youtube.com/shorts/Y_C1o1M-Pfo)   
 Progress:
 - All grid buttons mapped
 - All Control Buttons mapped
