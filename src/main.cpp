@@ -310,7 +310,7 @@ namespace
           sendMidiMessage(channel, lane.note, lane.velocity, true);
           // sendMidiMessage(1, 60, 127, true);
           Serial.printf("play=%u, %u, %u \n", channel, lane.note, lane.velocity);
-          delayMicroseconds(250); // Short delay between notes
+         // delayMicroseconds(250); // Short delay between notes
           sendMidiMessage(channel, lane.note, 0, false);
         }
       }
@@ -628,7 +628,7 @@ namespace
             lane.velocity,
             true);
 
-        delayMicroseconds(250);
+      //  delayMicroseconds(250);
 
         sendMidiMessage(
             channel,
