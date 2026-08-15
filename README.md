@@ -16,7 +16,10 @@ Todo:
 - Set Tempo, quantization, Functions for rest control buttons
 - MIDI playback sequence (mute channel?)
 - auto discovery of sequence length
-- Microsteps 
+- Microsteps
+
+  <img width="1834" height="616" alt="17868286194283894539707099595966" src="https://github.com/user-attachments/assets/77bb5b08-e9ed-4d48-aa5c-3f16cf06b46b" />
+
 
 Flashing the Teensy
 Use the Teensy’s programming USB connector only to upload firmware.
