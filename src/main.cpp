@@ -225,12 +225,12 @@ namespace
     lane.note = note;
     lane.velocity = velocity;
 
-    Serial.printf(
-        "RECORDED step=%u MIDI_CH=%u note=%u vel=%u\n",
-        g_stepIndex,
-        channel + 1,
-        note,
-        velocity);
+    // Serial.printf(
+    //     "RECORDED step=%u MIDI_CH=%u note=%u vel=%u\n",
+    //     g_stepIndex,
+    //     channel + 1,
+    //     note,
+    //     velocity);
 
     refreshLaunchpadGridLedState();
   }
@@ -309,7 +309,7 @@ namespace
         {
           sendMidiMessage(channel, lane.note, lane.velocity, true);
           // sendMidiMessage(1, 60, 127, true);
-          Serial.printf("play=%u, %u, %u \n", channel, lane.note, lane.velocity);
+          // Serial.printf("play=%u, %u, %u \n", channel, lane.note, lane.velocity);
          // delayMicroseconds(250); // Short delay between notes
           sendMidiMessage(channel, lane.note, 0, false);
         }
@@ -330,7 +330,7 @@ namespace
 
   void handleLaunchpadControl(byte note)
   {
-    Serial.printf("handled");
+    // Serial.printf("handled");
     switch (note)
     {
     case kLaunchpadTopRowControlNoteMin + 0:
@@ -339,7 +339,7 @@ namespace
       {
         g_channelOffset = 0;
       }
-      Serial.printf("go up=%u\n", g_channelOffset);
+      // Serial.printf("go up=%u\n", g_channelOffset);
       break;
     case kLaunchpadTopRowControlNoteMin + 1:
       // Channel scrolling down
@@ -347,7 +347,7 @@ namespace
       {
         g_channelOffset = 8;
       }
-      Serial.printf("go down=%u\n", g_channelOffset);
+      // Serial.printf("go down=%u\n", g_channelOffset);
       break;
     case kLaunchpadTopRowControlNoteMin + 2:
       // Step scrolling left
@@ -355,7 +355,7 @@ namespace
       {
         g_stepOffset -= 8;
       }
-      Serial.printf("go left=%u\n", g_stepOffset);
+      // Serial.printf("go left=%u\n", g_stepOffset);
       break;
     case kLaunchpadTopRowControlNoteMin + 3:
       // Step scrolling right
@@ -363,25 +363,25 @@ namespace
       {
         g_stepOffset += 8;
       }
-      Serial.printf("go right=%u\n", g_stepOffset);
+      // Serial.printf("go right=%u\n", g_stepOffset);
       break;
     case kLaunchpadTopRowControlNoteMin + 4:
       if (g_tempoBpm > kMinTempoBpm)
       {
         g_tempoBpm -= 10;
       }
-      Serial.printf("go g_tempoBpm=%u\n", g_tempoBpm);
+      // Serial.printf("go g_tempoBpm=%u\n", g_tempoBpm);
       break;
     case kLaunchpadTopRowControlNoteMin + 5:
       if (g_tempoBpm < kMaxTempoBpm)
       {
         g_tempoBpm += 10;
       }
-      Serial.printf("go g_tempoBpm=%u\n", g_tempoBpm);
+      // Serial.printf("go g_tempoBpm=%u\n", g_tempoBpm);
       break;
     case kLaunchpadTopRowControlNoteMin + 6:
       g_microstepDivisions = (g_microstepDivisions >= kMicrostepMax) ? 1 : (g_microstepDivisions * 2);
-      Serial.printf("go g_microstepDivisions=%u\n", g_microstepDivisions);
+      // Serial.printf("go g_microstepDivisions=%u\n", g_microstepDivisions);
       break;
     case kLaunchpadTopRowControlNoteMin + 7: // Note 97 - play all channel sequence, note 98 is just light, no pad
       g_running = !g_running;
@@ -394,7 +394,7 @@ namespace
       {
         midiPort.sendStop();
       }
-      Serial.printf("go g_running=%u\n", g_running);
+      // Serial.printf("go g_running=%u\n", g_running);
       break;
     case kLaunchpadRightColumnControlNoteMin + 0:
       g_running = false;
@@ -433,24 +433,24 @@ namespace
   void onLaunchpadNoteOn(byte channel, byte note, byte velocity)
   {
     g_seenLaunchpadInput = true;
-    Serial.printf("Launchpad note on ch=%u note=%u vel=%u\n", channel + 1, note, velocity);
+    // Serial.printf("Launchpad note on ch=%u note=%u vel=%u\n", channel + 1, note, velocity);
     stageLaunchpadPad(channel, note, velocity, true);
   }
 
   void onLaunchpadNoteOff(byte channel, byte note, byte velocity)
   {
     g_seenLaunchpadInput = true;
-    Serial.printf("Launchpad note off ch=%u note=%u vel=%u\n", channel + 1, note, velocity);
+    // Serial.printf("Launchpad note off ch=%u note=%u vel=%u\n", channel + 1, note, velocity);
     stageLaunchpadPad(channel, note, velocity, false);
   }
 
   void onLaunchpadControlChange(byte channel, byte control, byte value)
   {
-    Serial.printf(
-        "Launchpad CC ch=%u control=%u value=%u\n",
-        channel,
-        control,
-        value);
+    // Serial.printf(
+    //     "Launchpad CC ch=%u control=%u value=%u\n",
+    //     channel,
+    //     control,
+    //     value);
 
     // --------------------------------------------------
     // RIGHT COLUMN = SELECT MIDI RECORDING CHANNEL
@@ -477,9 +477,9 @@ namespace
         g_recordingHeldNote = true;
         g_recording = true;
 
-        Serial.printf(
-            "RECORD START: MIDI channel %u\n",
-            channelNumber);
+        // Serial.printf(
+        //     "RECORD START: MIDI channel %u\n",
+        //     channelNumber);
 
         refreshLaunchpadControlLedState();
         return;
@@ -494,9 +494,9 @@ namespace
         g_recordingHeldNote = false;
         g_recording = false;
 
-        Serial.printf(
-            "RECORD STOP: MIDI channel %u\n",
-            g_recordingChannelOffset + 1 + g_channelOffset);
+        // Serial.printf(
+        //     "RECORD STOP: MIDI channel %u\n",
+        //     g_recordingChannelOffset + 1 + g_channelOffset);
 
         // Make sure sequencer is running after recording.
         if (!g_running)
@@ -507,7 +507,7 @@ namespace
 
           midiPort.sendStart();
 
-          Serial.println("PLAYBACK START");
+          // Serial.println("PLAYBACK START");
         }
 
         refreshLaunchpadControlLedState();
@@ -534,12 +534,12 @@ namespace
     const byte data1 = midiPort.getData1();
     const byte data2 = midiPort.getData2();
 
-    Serial.printf(
-        "HW MIDI type=%u ch=%u note=%u vel=%u\n",
-        type,
-        channel,
-        data1,
-        data2);
+    // Serial.printf(
+    //     "HW MIDI type=%u ch=%u note=%u vel=%u\n",
+    //     type,
+    //     channel,
+    //     data1,
+    //     data2);
 
     // We only record MIDI notes while holding
     // a Launchpad recording-channel button.
@@ -556,12 +556,12 @@ namespace
     {
       const uint8_t recordChannel = g_recordingChannelOffset + g_channelOffset;
 
-      Serial.printf(
-          "RECORD -> MIDI CH %u  note=%u velocity=%u step=%u\n",
-          recordChannel + 1,
-          data1,
-          data2,
-          g_stepIndex);
+      // Serial.printf(
+      //     "RECORD -> MIDI CH %u  note=%u velocity=%u step=%u\n",
+      //     recordChannel + 1,
+      //     data1,
+      //     data2,
+      //     g_stepIndex);
 
       recordCurrentStep(
           recordChannel,
@@ -579,10 +579,10 @@ namespace
         (type == midi::NoteOn && data2 == 0))
     {
       // DO NOT modify the sequence here.
-      Serial.printf(
-          "Keyboard NoteOff ch=%u note=%u\n",
-          g_recordingChannelOffset + g_channelOffset + 1,
-          data1);
+      // Serial.printf(
+      //     "Keyboard NoteOff ch=%u note=%u\n",
+      //     g_recordingChannelOffset + g_channelOffset + 1,
+      //     data1);
 
       return;
     }
@@ -601,12 +601,12 @@ namespace
         continue;
       }
 
-      Serial.printf(
-          "PLAY step=%u MIDI_CH=%u note=%u vel=%u\n",
-          step,
-          channel + 1,
-          lane.note,
-          lane.velocity);
+      // Serial.printf(
+      //     "PLAY step=%u MIDI_CH=%u note=%u vel=%u\n",
+      //     step,
+      //     channel + 1,
+      //     lane.note,
+      //     lane.velocity);
 
       const uint16_t swingDelayUs =
           (step % 2 == 1 && g_swingPct > 0)
@@ -693,12 +693,12 @@ void setup()
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWriteFast(LED_BUILTIN, LOW);
 
-  Serial.begin(115200);
+  // Serial.begin(115200);
 
-  while (!Serial && millis() < 1000)
-  {
-    ;
-  }
+  // while (!Serial && millis() < 1000)
+  // {
+  //   ;
+  // }
 
   // Hardware DIN MIDI
   midiPort.begin(MIDI_CHANNEL_OMNI);
@@ -718,7 +718,7 @@ void setup()
   refreshLaunchpadControlLedState();
   refreshLaunchpadGridLedState();
 
-  Serial.println("Launchpad USB host + hardware MIDI ready");
+  // Serial.println("Launchpad USB host + hardware MIDI ready");
 }
 
 void loop()
@@ -748,7 +748,7 @@ void loop()
 
     advanceSequencerStep();
 
-    debugPrintState();
+    // debugPrintState();
 
     refreshLaunchpadGridLedState();
   }
@@ -761,14 +761,14 @@ void loop()
         !digitalReadFast(LED_BUILTIN));
   }
 
-  if (g_statusTimer >= 1000)
-  {
-    g_statusTimer = 0;
+  // if (g_statusTimer >= 1000)
+  // {
+  //   g_statusTimer = 0;
 
-    if (!g_seenLaunchpadInput)
-    {
-      Serial.println(
-          "USB host task running; no Launchpad input seen yet");
-    }
-  }
+  //   if (!g_seenLaunchpadInput)
+  //   {
+  //     Serial.println(
+  //         "USB host task running; no Launchpad input seen yet");
+  //   }
+  // }
 }
