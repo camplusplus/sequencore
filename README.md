@@ -231,4 +231,5 @@ If you want, I can give you the exact “perfboard-ready” schematic for:
 - 6N138 optocoupler
 - all resistor values in one pasteable diagram.
 
+Used code for initialization of Launchpad from DrivenByMoss project.
 Launchpad X is property of Novation
