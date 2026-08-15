@@ -245,12 +245,12 @@ namespace
 
     // Light up the scrolling indicator LEDs
     // First two top row buttons (91, 92) for channel scrolling
-    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 2, g_channelOffset > 0 ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
-    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 3, (g_channelOffset + 8) < kMidiChannelCount ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 0, g_channelOffset > 0 ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 1, (g_channelOffset + 8) < kMidiChannelCount ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
 
     // Next two top row buttons (93, 94) for step scrolling
-    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 4, g_stepOffset > 0 ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
-    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 5, (g_stepOffset + 8) < kStepCount ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 2, g_stepOffset > 0 ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
+    setLaunchpadLedColor(kLaunchpadTopRowControlNoteMin + 3, (g_stepOffset + 8) < kStepCount ? kLaunchpadColorWhiteLow : kLaunchpadColorOff);
   }
 
   void refreshLaunchpadControlLedState()
@@ -337,15 +337,15 @@ namespace
       // Channel scrolling up
       if (g_channelOffset > 0)
       {
-        g_channelOffset -= 8;
+        g_channelOffset = 0;
       }
       Serial.printf("go up=%u\n", g_channelOffset);
       break;
     case kLaunchpadTopRowControlNoteMin + 1:
       // Channel scrolling down
-      if ((g_channelOffset + 8) < kMidiChannelCount)
+      if (g_channelOffset == 0)
       {
-        g_channelOffset += 8;
+        g_channelOffset = 8;
       }
       Serial.printf("go down=%u\n", g_channelOffset);
       break;
@@ -466,13 +466,13 @@ namespace
         // ...
         // 19 -> channel 8
         //
-        // If you later add an offset, this remains 0..15.
+        // If you later add an offset, this becomes 9..16.
 
         uint8_t channelNumber =
             (kLaunchpadRightColumnControlNoteMax - control) / 10 + 1;
 
         g_recordingChannelOffset = channelNumber - 1;
-
+        channelNumber += g_channelOffset;
         // Holding this button means RECORD.
         g_recordingHeldNote = true;
         g_recording = true;
@@ -496,7 +496,7 @@ namespace
 
         Serial.printf(
             "RECORD STOP: MIDI channel %u\n",
-            g_recordingChannelOffset + 1);
+            g_recordingChannelOffset + 1 + g_channelOffset);
 
         // Make sure sequencer is running after recording.
         if (!g_running)
@@ -554,7 +554,7 @@ namespace
 
     if (type == midi::NoteOn && data2 > 0)
     {
-      const uint8_t recordChannel = g_recordingChannelOffset;
+      const uint8_t recordChannel = g_recordingChannelOffset + g_channelOffset;
 
       Serial.printf(
           "RECORD -> MIDI CH %u  note=%u velocity=%u step=%u\n",
@@ -581,7 +581,7 @@ namespace
       // DO NOT modify the sequence here.
       Serial.printf(
           "Keyboard NoteOff ch=%u note=%u\n",
-          channel,
+          g_recordingChannelOffset + g_channelOffset + 1,
           data1);
 
       return;
