@@ -96,12 +96,24 @@ void refreshLaunchpadGridLedState()
        note < kLaunchpadRightColumnControlNoteMax;
        ++note)
   {
-    if (!isLaunchpadControlNote(note))
+    if (isLaunchpadControlNote(note))
     {
-      setLaunchpadLedColor(
-          note,
-          kLaunchpadColorWhiteHigh);
+      continue;
     }
+
+    // Grid pads map to a channel lane (row). Muted lanes show green.
+    const uint8_t row = note / 8;
+    const uint8_t laneChannel =
+        (row + g_channelOffset) % kMidiChannelCount;
+
+    const bool muted =
+        (g_channelMuteMask & (1U << laneChannel)) != 0;
+
+    setLaunchpadLedColor(
+        note,
+        muted
+            ? kLaunchpadColorGreenHigh
+            : kLaunchpadColorWhiteHigh);
   }
 
   // Channel scrolling.
@@ -188,12 +200,14 @@ void refreshLaunchpadControlLedState()
           ? kLaunchpadColorAmberLow
           : kLaunchpadColorWhiteLow);
 
-  // Microstep.
+  // Modifier (Pad 97): 0 = off, 1 = green (mute), 2 = red (delete).
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 6,
-      g_microstepDivisions > 1
-          ? kLaunchpadColorAmberHigh
-          : kLaunchpadColorOff);
+      g_modifierMode == 1
+          ? kLaunchpadColorGreenHigh
+          : (g_modifierMode == 2
+                 ? kLaunchpadColorRedHigh
+                 : kLaunchpadColorOff));
 
   // Run/stop.
   setLaunchpadLedColor(
@@ -480,29 +494,66 @@ void onLaunchpadControlChange(
   (void)channel;
 
   // ---------------------------------------------------------------------------
-  // RIGHT COLUMN = SELECT MIDI RECORDING CHANNEL
+  // RIGHT COLUMN
+  //   Modifier mode 1 (green) = mute channel
+  //   Modifier mode 2 (red)   = delete channel
+  //   Modifier mode 0 (none)  = select recording channel (hold)
   // ---------------------------------------------------------------------------
 
   if (isLaunchpadRightColumnControlNote(control))
   {
+    // 89 -> channel 1
+    // 79 -> channel 2
+    // 69 -> channel 3
+    // ...
+    // 19 -> channel 8
+    const uint8_t channelNumber =
+        (kLaunchpadRightColumnControlNoteMax -
+         control) /
+            10 +
+        1;
+
+    // ---------------------------------------------------------------------------
+    // MODIFIER MODE: mute / delete
+    // ---------------------------------------------------------------------------
+
+    if (g_modifierMode > 0)
+    {
+      // Act only on press so mute is a persistent toggle, not momentary.
+      // (Right-column pads send a CC on press and another on release.)
+      if (value != 0)
+      {
+        const uint8_t internalChannel =
+            (channelNumber - 1) + g_channelOffset;
+
+        if (internalChannel < kMidiChannelCount)
+        {
+          if (g_modifierMode == 1)
+          {
+            // Toggle mute for this channel.
+            g_channelMuteMask ^= (1U << internalChannel);
+          }
+          else if (g_modifierMode == 2)
+          {
+            // Delete the entire channel lane.
+            deleteChannel(internalChannel);
+          }
+        }
+
+        refreshLaunchpadControlLedState();
+        refreshLaunchpadGridLedState();
+      }
+      return;
+    }
+
+    // ---------------------------------------------------------------------------
+    // NONE MODE: select recording channel (hold)
+    // ---------------------------------------------------------------------------
+
     if (value > 0)
     {
-      // 89 -> channel 1
-      // 79 -> channel 2
-      // 69 -> channel 3
-      // ...
-      // 19 -> channel 8
-
-      uint8_t channelNumber =
-          (kLaunchpadRightColumnControlNoteMax -
-           control) /
-              10 +
-          1;
-
       g_recordingChannelOffset =
           channelNumber - 1;
-
-      channelNumber += g_channelOffset;
 
       // Holding this button means RECORD.
       g_recordingHeldNote = true;
@@ -537,49 +588,27 @@ void onLaunchpadControlChange(
   }
 
   // ---------------------------------------------------------------------------
-  // TOP ROW MODIFIER BUTTON
+  // TOP ROW MODIFIER BUTTON (PAD 97)
   // ---------------------------------------------------------------------------
 
   if (isLaunchpadTopRowControlNote(control))
   {
-    // Holding 97 maps the other top-row pads to modifier actions,
-    // e.g. 97+91 = tempo up, 97+92 = tempo down.
-    const bool isModifier =
-        (control == kLaunchpadTopRowControlNoteMin + 6);
-
-    if (isModifier)
+    // Pad 97 (note 91+6) is the modifier: a 3-state toggle that cycles
+    // on each press. 0 = none (off), 1 = green (mute), 2 = red (delete).
+    // While set, the right column pads act on the current channel.
+    if (control == kLaunchpadTopRowControlNoteMin + 6)
     {
-      g_ModifierHeld = (value != 0);
-    }
+      if (value != 0)
+      {
+        g_modifierMode = (g_modifierMode + 1) % 3;
+      }
 
-    if (value != 0)
+      refreshLaunchpadControlLedState();
+    }
+    else if (value != 0)
     {
       handleLaunchpadControl(control);
     }
-
-    // Holding 97 map other buttons differently
-    // example:
-    // const bool tempoModifierHeld =
-    //     (g_topRowHeld & (uint8_t(1) <<
-    //                      (kLaunchpadTopRowControlNoteMin + 6 -
-    //                       kLaunchpadTopRowControlNoteMin))) !=
-    //     0;
-
-    // if (tempoModifierHeld &&
-    //     control == kLaunchpadTopRowControlNoteMin + 0)
-    // {
-    //   adjustLaunchpadTempo(+1);
-    //   refreshLaunchpadControlLedState();
-    //   return;
-    // }
-
-    // if (tempoModifierHeld &&
-    //     control == kLaunchpadTopRowControlNoteMin + 1)
-    // {
-    //   adjustLaunchpadTempo(-1);
-    //   refreshLaunchpadControlLedState();
-    //   return;
-    // }
     return;
   }
 

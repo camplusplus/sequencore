@@ -27,6 +27,8 @@ void sendStepClockPulse();
 
 void clearCurrentStep(uint8_t step);
 
+void deleteChannel(uint8_t channel);
+
 void recordCurrentStep(
     uint8_t channel,
     byte note,

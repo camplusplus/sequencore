@@ -112,4 +112,12 @@ extern bool g_launchpadControlLedsInitialized;
 
 extern byte g_lastPressedControlNote;
 extern byte g_controlFlashNote;
-extern bool g_ModifierHeld;
+
+// Pad 97 modifier mode (3-state toggle, cycles on press).
+// 0 = none (LED off)
+// 1 = green (right column pads = mute channel)
+// 2 = red (right column pads = delete channel)
+extern uint8_t g_modifierMode;
+
+// Bit N set = channel N is muted (green modifier mode).
+extern uint32_t g_channelMuteMask;

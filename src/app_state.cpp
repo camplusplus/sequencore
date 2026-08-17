@@ -60,4 +60,5 @@ bool g_launchpadControlLedsInitialized = false;
 
 byte g_lastPressedControlNote = 0xFF;
 byte g_controlFlashNote = 0xFF;
-bool g_ModifierHeld = false;
+uint8_t g_modifierMode = 0;
+uint32_t g_channelMuteMask = 0;

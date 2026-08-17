@@ -83,6 +83,26 @@ void clearCurrentStep(uint8_t step)
   }
 }
 
+void deleteChannel(uint8_t channel)
+{
+  if (channel >= kMidiChannelCount)
+  {
+    return;
+  }
+
+  for (uint8_t step = 0;
+       step < kStepCount;
+       ++step)
+  {
+    g_sequence[step][channel].active = false;
+  }
+
+  // A deleted channel is no longer muted.
+  g_channelMuteMask &= ~(1U << channel);
+
+  refreshLaunchpadGridLedState();
+}
+
 void recordCurrentStep(
     uint8_t channel,
     byte note,
@@ -127,6 +147,12 @@ void sendActiveStepNotes(uint8_t step)
   {
     StepLaneState &lane =
         g_sequence[step][channel];
+
+    // Muted channels are not played back.
+    if (g_channelMuteMask & (1U << channel))
+    {
+      continue;
+    }
 
     if (!lane.active)
     {
@@ -181,6 +207,12 @@ void suppressLastStepNotes(uint8_t step)
     StepLaneState &lane =
         g_sequence[step][channel];
 
+    // Muted channels were never played back.
+    if (g_channelMuteMask & (1U << channel))
+    {
+      continue;
+    }
+
     if (lane.active)
     {
       sendMidiMessage(
@@ -224,6 +256,12 @@ void playAllChannelSequence()
     {
       StepLaneState &lane =
           g_sequence[step][channel];
+
+      // Muted channels are not played back.
+      if (g_channelMuteMask & (1U << channel))
+      {
+        continue;
+      }
 
       if (lane.active)
       {
