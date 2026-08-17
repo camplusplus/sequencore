@@ -90,6 +90,26 @@ void sendLaunchpadProgramMode()
       true);
 }
 
+static bool isChannelRecorded(uint8_t channel)
+{
+  if (channel >= kMidiChannelCount)
+  {
+    return false;
+  }
+
+  for (uint8_t step = 0;
+       step < kStepCount;
+       ++step)
+  {
+    if (g_sequence[step][channel].active)
+    {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 void refreshLaunchpadGridLedState()
 {
   for (uint8_t note = 0;
@@ -216,42 +236,42 @@ void refreshLaunchpadControlLedState()
           ? kLaunchpadColorWhiteHigh
           : kLaunchpadColorRedHigh);
 
-  // Right column.
-  setLaunchpadLedColor(
-      kLaunchpadRightColumnControlNoteMin + 0,
-      kLaunchpadColorRedHigh);
+  // Right column: channel control pads.
+  //   green  = muted
+  //   yellow = has recorded steps
+  //   white  = empty
+  for (uint8_t i = 0; i < 8; ++i)
+  {
+    const byte note =
+        kLaunchpadRightColumnControlNoteMin + i * 10;
 
-  setLaunchpadLedColor(
-      kLaunchpadRightColumnControlNoteMin + 10,
-      kLaunchpadColorWhiteHigh);
+    // 89 -> channel 1, 79 -> channel 2, ... 19 -> channel 8
+    const uint8_t channelNumber =
+        (kLaunchpadRightColumnControlNoteMax -
+         note) /
+            10 +
+        1;
 
-  setLaunchpadLedColor(
-      kLaunchpadRightColumnControlNoteMin + 20,
-      kLaunchpadColorBlueLow);
+    const uint8_t internalChannel =
+        (channelNumber - 1) + g_channelOffset;
 
-  setLaunchpadLedColor(
-      kLaunchpadRightColumnControlNoteMin + 30,
-      kLaunchpadColorBlueLow);
+    byte color;
+    if (g_channelMuteMask & (1U << internalChannel))
+    {
+      color = kLaunchpadColorGreenHigh;
+    }
+    else if (internalChannel < kMidiChannelCount &&
+             isChannelRecorded(internalChannel))
+    {
+      color = kLaunchpadColorYellowHigh;
+    }
+    else
+    {
+      color = kLaunchpadColorWhiteHigh;
+    }
 
-  setLaunchpadLedColor(
-      kLaunchpadRightColumnControlNoteMin + 40,
-      kLaunchpadColorAmberLow);
-
-  setLaunchpadLedColor(
-      kLaunchpadRightColumnControlNoteMin + 50,
-      kLaunchpadColorAmberLow);
-
-  setLaunchpadLedColor(
-      kLaunchpadRightColumnControlNoteMin + 60,
-      g_recording
-          ? kLaunchpadColorRedHigh
-          : kLaunchpadColorOff);
-
-  setLaunchpadLedColor(
-      kLaunchpadRightColumnControlNoteMin + 70,
-      g_overdub
-          ? kLaunchpadColorBlueLow
-          : kLaunchpadColorOff);
+    setLaunchpadLedColor(note, color);
+  }
 }
 
 // -----------------------------------------------------------------------------
