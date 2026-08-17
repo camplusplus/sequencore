@@ -18,7 +18,9 @@ ToDo:
 - Record new pattern (delete old, not overdub)
 - simple display on note pads
 - Set Tempo (pad Custom + up/down), quantization (pad Custom + left/right), Functions for rest control buttons
-- Step Editor, microsteps, ratchet, sequence length 
+- Save patterns to mircosd card
+- Step Editor, microsteps, ratchet, sequence length
+- song mode
 
   <img width="1834" height="616" alt="17868286194283894539707099595966" src="https://github.com/user-attachments/assets/77bb5b08-e9ed-4d48-aa5c-3f16cf06b46b" />
 
