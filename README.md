@@ -16,13 +16,14 @@ Progress:
 - Added Modifier key (Custom)
 
 ToDo:
-- Quantization, Functions for rest control buttons
-- Pausing/mute playback per midi channel (pad Custom + Right control pad)
-- Record new pattern (delete old, not overdub)
-- simple display on note pads, internal led bpm sync
+
+- Pressing Modifier key should toggle modes (also colors change)
+- Pausing/Delete playback per midi channel (pad Custom + Right control pad)
+- Quantization, Micro-steps, Ratchet Functions for rest control buttons
+- Simple display on note pads, internal led bpm sync
 - Save patterns to mircosd card
 - Step Editor, microsteps, ratchet, sequence length
-- song mode
+- Song mode
 
   <img width="1834" height="616" alt="17868286194283894539707099595966" src="https://github.com/user-attachments/assets/77bb5b08-e9ed-4d48-aa5c-3f16cf06b46b" />
 
