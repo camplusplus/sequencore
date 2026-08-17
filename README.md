@@ -14,10 +14,10 @@ Progress:
 - MIDI record sequence (press right column control buttons to record/overdub)
 
 ToDo:
+- Set Tempo (pad Custom + up/down), quantization (pad Custom + left/right), Functions for rest control buttons
 - Pausing/mute playback per midi channel (pad Custom + Right control pad)
 - Record new pattern (delete old, not overdub)
-- simple display on note pads
-- Set Tempo (pad Custom + up/down), quantization (pad Custom + left/right), Functions for rest control buttons
+- simple display on note pads, internal led bpm sync
 - Save patterns to mircosd card
 - Step Editor, microsteps, ratchet, sequence length
 - song mode
