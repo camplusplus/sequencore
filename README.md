@@ -12,9 +12,11 @@ Progress:
 - Scroll upper, lower midi channels mapped
 - Scroll left, right note steps mapped
 - MIDI record sequence (press right column control buttons to record/overdub)
+- Set Tempo (pads Session+/Note-)
+- Added Modifier key (Custom)
 
 ToDo:
-- Set Tempo (pad Custom + up/down), quantization (pad Custom + left/right), Functions for rest control buttons
+- Quantization, Functions for rest control buttons
 - Pausing/mute playback per midi channel (pad Custom + Right control pad)
 - Record new pattern (delete old, not overdub)
 - simple display on note pads, internal led bpm sync
