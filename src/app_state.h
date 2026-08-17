@@ -112,3 +112,4 @@ extern bool g_launchpadControlLedsInitialized;
 
 extern byte g_lastPressedControlNote;
 extern byte g_controlFlashNote;
+extern bool g_ModifierHeld;

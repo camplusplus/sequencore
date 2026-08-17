@@ -52,8 +52,7 @@ void setLaunchpadLedColor(
           0x02,
           0x0C};
 
-  uint8_t data[
-      sizeof(kLaunchpadSysexHeader) + 4];
+  uint8_t data[sizeof(kLaunchpadSysexHeader) + 4];
 
   memcpy(
       data,
@@ -278,6 +277,29 @@ void stageLaunchpadPad(
 }
 
 // -----------------------------------------------------------------------------
+// Launchpad tempo
+// -----------------------------------------------------------------------------
+
+void adjustLaunchpadTempo(int16_t delta)
+{
+  const int16_t newTempo =
+      static_cast<int16_t>(g_tempoBpm) + delta;
+
+  if (newTempo < static_cast<int16_t>(kMinTempoBpm))
+  {
+    g_tempoBpm = kMinTempoBpm;
+  }
+  else if (newTempo > static_cast<int16_t>(kMaxTempoBpm))
+  {
+    g_tempoBpm = kMaxTempoBpm;
+  }
+  else
+  {
+    g_tempoBpm = static_cast<uint16_t>(newTempo);
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Launchpad controls
 // -----------------------------------------------------------------------------
 
@@ -285,9 +307,9 @@ void handleLaunchpadControl(byte note)
 {
   switch (note)
   {
-  // ---------------------------------------------------------------------------
-  // Channel scrolling
-  // ---------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------
+    // Channel scrolling
+    // ---------------------------------------------------------------------------
 
   case kLaunchpadTopRowControlNoteMin + 0:
     if (g_channelOffset > 0)
@@ -303,9 +325,9 @@ void handleLaunchpadControl(byte note)
     }
     break;
 
-  // ---------------------------------------------------------------------------
-  // Step scrolling
-  // ---------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------
+    // Step scrolling
+    // ---------------------------------------------------------------------------
 
   case kLaunchpadTopRowControlNoteMin + 2:
     if (g_stepOffset > 0)
@@ -321,38 +343,38 @@ void handleLaunchpadControl(byte note)
     }
     break;
 
-  // ---------------------------------------------------------------------------
-  // Tempo
-  // ---------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------
+    // Tempo
+    // ---------------------------------------------------------------------------
 
   case kLaunchpadTopRowControlNoteMin + 4:
     if (g_tempoBpm > kMinTempoBpm)
     {
-      g_tempoBpm -= 10;
+      g_tempoBpm -= 1;
     }
     break;
 
   case kLaunchpadTopRowControlNoteMin + 5:
     if (g_tempoBpm < kMaxTempoBpm)
     {
-      g_tempoBpm += 10;
+      g_tempoBpm += 1;
     }
     break;
 
-  // ---------------------------------------------------------------------------
-  // Microsteps
-  // ---------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------
+    // Microsteps
+    // ---------------------------------------------------------------------------
 
-  case kLaunchpadTopRowControlNoteMin + 6:
-    g_microstepDivisions =
-        (g_microstepDivisions >= kMicrostepMax)
-            ? 1
-            : (g_microstepDivisions * 2);
-    break;
+    // case kLaunchpadTopRowControlNoteMin + 6:
+    //   g_microstepDivisions =
+    //       (g_microstepDivisions >= kMicrostepMax)
+    //           ? 1
+    //           : (g_microstepDivisions * 2);
+    //   break;
 
-  // ---------------------------------------------------------------------------
-  // Play / stop
-  // ---------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------
+    // Play / stop
+    // ---------------------------------------------------------------------------
 
   case kLaunchpadTopRowControlNoteMin + 7:
     g_running = !g_running;
@@ -368,9 +390,9 @@ void handleLaunchpadControl(byte note)
     }
     break;
 
-  // ---------------------------------------------------------------------------
-  // Right-column controls
-  // ---------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------
+    // Right-column controls
+    // ---------------------------------------------------------------------------
 
   case kLaunchpadRightColumnControlNoteMin + 0:
     g_running = false;
@@ -512,6 +534,53 @@ void onLaunchpadControlChange(
       refreshLaunchpadControlLedState();
       return;
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // TOP ROW MODIFIER BUTTON
+  // ---------------------------------------------------------------------------
+
+  if (isLaunchpadTopRowControlNote(control))
+  {
+    // Holding 97 maps the other top-row pads to modifier actions,
+    // e.g. 97+91 = tempo up, 97+92 = tempo down.
+    const bool isModifier =
+        (control == kLaunchpadTopRowControlNoteMin + 6);
+
+    if (isModifier)
+    {
+      g_ModifierHeld = (value != 0);
+    }
+
+    if (value != 0)
+    {
+      handleLaunchpadControl(control);
+    }
+
+    // Holding 97 map other buttons differently
+    // example:
+    // const bool tempoModifierHeld =
+    //     (g_topRowHeld & (uint8_t(1) <<
+    //                      (kLaunchpadTopRowControlNoteMin + 6 -
+    //                       kLaunchpadTopRowControlNoteMin))) !=
+    //     0;
+
+    // if (tempoModifierHeld &&
+    //     control == kLaunchpadTopRowControlNoteMin + 0)
+    // {
+    //   adjustLaunchpadTempo(+1);
+    //   refreshLaunchpadControlLedState();
+    //   return;
+    // }
+
+    // if (tempoModifierHeld &&
+    //     control == kLaunchpadTopRowControlNoteMin + 1)
+    // {
+    //   adjustLaunchpadTempo(-1);
+    //   refreshLaunchpadControlLedState();
+    //   return;
+    // }
+    return;
   }
 
   // ---------------------------------------------------------------------------

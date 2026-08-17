@@ -60,3 +60,4 @@ bool g_launchpadControlLedsInitialized = false;
 
 byte g_lastPressedControlNote = 0xFF;
 byte g_controlFlashNote = 0xFF;
+bool g_ModifierHeld = false;
