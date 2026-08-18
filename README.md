@@ -16,6 +16,7 @@ Progress:
 - Added Modifier key (Custom)
 - Pressing Modifier key (Custom) should toggle modes (also colors change)
 - Pausing/Delete playback per midi channel (Custom to toggle mode: green=mute, red=delete and select right row channel)
+- Displaying steps with recorded notes
 
 ToDo:
 
