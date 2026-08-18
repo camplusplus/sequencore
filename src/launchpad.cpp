@@ -15,11 +15,16 @@ bool isLaunchpadTopRowControlNote(byte note)
          note <= kLaunchpadTopRowControlNoteMax;
 }
 
+bool isNoteOnTheRightEdge(byte note)
+{
+  return (note - kLaunchpadRightColumnControlNoteMin) % 10 == 0;
+}
+
 bool isLaunchpadRightColumnControlNote(byte note)
 {
   return note >= kLaunchpadRightColumnControlNoteMin &&
          note <= kLaunchpadRightColumnControlNoteMax &&
-         ((note - kLaunchpadRightColumnControlNoteMin) % 10 == 0);
+         isNoteOnTheRightEdge(note);
 }
 
 bool isLaunchpadControlNote(byte note)
@@ -28,11 +33,14 @@ bool isLaunchpadControlNote(byte note)
          isLaunchpadRightColumnControlNote(note);
 }
 
+// notes are 8x8 grid on top starting with 81-88,
+// next rows 71-78, 61-68, 51-58, 41-48, 31-38, 21-28, 11-18
 bool isLaunchpadGridPad(byte note)
 {
   return note >= kLaunchpadGridNoteMin &&
          note <= kLaunchpadGridNoteMax &&
-         !isLaunchpadControlNote(note);
+         note % 10 != 0 &&
+         !isNoteOnTheRightEdge(note);
 }
 
 // -----------------------------------------------------------------------------
@@ -112,20 +120,20 @@ static bool isChannelRecorded(uint8_t channel)
 
 void refreshLaunchpadGridLedState()
 {
-  for (uint8_t note = 0;
-       note < kLaunchpadRightColumnControlNoteMax;
+  for (uint8_t note = kLaunchpadGridNoteMin;
+       note <= kLaunchpadGridNoteMax;
        ++note)
   {
-    if (isLaunchpadControlNote(note))
+    if (!isLaunchpadGridPad(note))
     {
       continue;
     }
 
     // Grid pads show the sequence step for the visible column.
     // Steps with a recorded note light up white; empty steps stay off.
-    const uint8_t relativeNote = note - 81;
-    const uint8_t row = relativeNote / 8;
-    const uint8_t col = relativeNote % 8;
+    // error is when recording channel 2, with midi input 1 it erases lights on channel 1.
+    const uint8_t row = 8 - (note / 10);
+    const uint8_t col = (note % 10) - 1;
 
     const uint8_t step =
         (col + g_stepOffset) % kStepCount;
@@ -138,6 +146,15 @@ void refreshLaunchpadGridLedState()
         g_sequence[step][laneChannel].active
             ? kLaunchpadColorWhiteHigh
             : kLaunchpadColorOff);
+
+    if (row != laneChannel || col != step)
+      Serial.printf(
+          "note=%d row=%d col=%d step=%d lane=%d\n",
+          note,
+          row,
+          col,
+          step,
+          laneChannel);
   }
 
   // Channel scrolling.

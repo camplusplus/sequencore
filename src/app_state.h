@@ -21,8 +21,20 @@ extern MIDIDevice_BigBuffer launchpad;
 constexpr uint8_t kStepCount = 16;
 constexpr uint8_t kMidiChannelCount = 16;
 
-constexpr uint8_t kLaunchpadGridNoteMin = 0;
+constexpr uint8_t kLaunchpadGridNoteMin = 11;
 constexpr uint8_t kLaunchpadGridNoteMax = 88;
+
+constexpr uint8_t kGridNotes[8][8] = {
+        {81, 82, 83, 84, 85, 86, 87, 88}, // Row 0 (80s)
+        {71, 72, 73, 74, 75, 76, 77, 78}, // Row 1 (70s)
+        {61, 62, 63, 64, 65, 66, 67, 68}, // Row 2 (60s)
+        {51, 52, 53, 54, 55, 56, 57, 58}, // Row 3 (50s)
+        {41, 42, 43, 44, 45, 46, 47, 48}, // Row 4 (40s)
+        {31, 32, 33, 34, 35, 36, 37, 38}, // Row 5 (30s)
+        {21, 22, 23, 24, 25, 26, 27, 28}, // Row 6 (20s)
+        {11, 12, 13, 14, 15, 16, 17, 18}  // Row 7 (10s)
+    };
+
 
 constexpr uint8_t kLaunchpadTopRowControlNoteMin = 91;
 constexpr uint8_t kLaunchpadTopRowControlNoteMax = 98;
