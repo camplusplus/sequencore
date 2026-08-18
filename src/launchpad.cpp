@@ -145,15 +145,6 @@ void refreshLaunchpadGridLedState()
         g_sequence[step][laneChannel].active
             ? kLaunchpadColorWhiteHigh
             : kLaunchpadColorOff);
-
-    if (row != laneChannel || col != step)
-      Serial.printf(
-          "note=%d row=%d col=%d step=%d lane=%d\n",
-          note,
-          row,
-          col,
-          step,
-          laneChannel);
   }
 
   // Channel scrolling.
