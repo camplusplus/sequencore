@@ -121,19 +121,23 @@ void refreshLaunchpadGridLedState()
       continue;
     }
 
-    // Grid pads map to a channel lane (row). Muted lanes show green.
-    const uint8_t row = note / 8;
+    // Grid pads show the sequence step for the visible column.
+    // Steps with a recorded note light up white; empty steps stay off.
+    const uint8_t relativeNote = note - 81;
+    const uint8_t row = relativeNote / 8;
+    const uint8_t col = relativeNote % 8;
+
+    const uint8_t step =
+        (col + g_stepOffset) % kStepCount;
+
     const uint8_t laneChannel =
         (row + g_channelOffset) % kMidiChannelCount;
 
-    const bool muted =
-        (g_channelMuteMask & (1U << laneChannel)) != 0;
-
     setLaunchpadLedColor(
         note,
-        muted
-            ? kLaunchpadColorGreenHigh
-            : kLaunchpadColorWhiteHigh);
+        g_sequence[step][laneChannel].active
+            ? kLaunchpadColorWhiteHigh
+            : kLaunchpadColorOff);
   }
 
   // Channel scrolling.
@@ -422,49 +426,6 @@ void handleLaunchpadControl(byte note)
     {
       midiPort.sendStop();
     }
-    break;
-
-    // ---------------------------------------------------------------------------
-    // Right-column controls
-    // ---------------------------------------------------------------------------
-
-  case kLaunchpadRightColumnControlNoteMin + 0:
-    g_running = false;
-    midiPort.sendStop();
-    break;
-
-  case kLaunchpadRightColumnControlNoteMin + 10:
-    g_running = true;
-    midiPort.sendStart();
-    break;
-
-  case kLaunchpadRightColumnControlNoteMin + 20:
-    memset(
-        g_sequence,
-        0,
-        sizeof(g_sequence));
-
-    refreshLaunchpadGridLedState();
-    break;
-
-  case kLaunchpadRightColumnControlNoteMin + 30:
-    g_stepIndex = 0;
-    break;
-
-  case kLaunchpadRightColumnControlNoteMin + 40:
-    g_tempoBpm = 120;
-    break;
-
-  case kLaunchpadRightColumnControlNoteMin + 50:
-    g_swingPct = 0;
-    break;
-
-  case kLaunchpadRightColumnControlNoteMin + 60:
-    g_recording = !g_recording;
-    break;
-
-  case kLaunchpadRightColumnControlNoteMin + 70:
-    g_overdub = !g_overdub;
     break;
 
   default:
