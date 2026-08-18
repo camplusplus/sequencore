@@ -120,11 +120,9 @@ void recordCurrentStep(
     return;
   }
 
-  if (!g_overdub)
-  {
-    clearCurrentStep(g_stepIndex);
-  }
-
+  // Writing to the lane replaces only this channel's step at the
+  // current step index. Steps of other channels in the same column
+  // must stay intact.
   StepLaneState &lane =
       g_sequence[g_stepIndex][channel];
 

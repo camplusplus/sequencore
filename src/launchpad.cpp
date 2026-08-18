@@ -131,7 +131,6 @@ void refreshLaunchpadGridLedState()
 
     // Grid pads show the sequence step for the visible column.
     // Steps with a recorded note light up white; empty steps stay off.
-    // error is when recording channel 2, with midi input 1 it erases lights on channel 1.
     const uint8_t row = 8 - (note / 10);
     const uint8_t col = (note % 10) - 1;
 
