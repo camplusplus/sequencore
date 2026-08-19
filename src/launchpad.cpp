@@ -47,10 +47,54 @@ bool isLaunchpadGridPad(byte note)
 // Launchpad LEDs
 // -----------------------------------------------------------------------------
 
+namespace
+{
+  // The Launchpad note numbers that map to an LED.
+  constexpr uint8_t kLedNoteMin = 11;
+  constexpr uint8_t kLedNoteMax = 98;
+  constexpr size_t kLedCacheSize =
+      kLedNoteMax - kLedNoteMin + 1;
+
+  // A color value is 0..18; 0xFF is a valid "not yet synced" sentinel.
+  constexpr byte kLedColorUnsynced = 0xFF;
+
+  // Last color actually sent to each LED. Re-sending an identical
+  // SysEx command re-triggers the Launchpad LED driver, which makes
+  // the pad visibly flicker. Caching lets refresh functions run at
+  // any rate without USB traffic or flicker unless a color changes.
+  byte g_launchpadLedCache[kLedCacheSize];
+
+  void resetLaunchpadLedCache()
+  {
+    memset(
+        g_launchpadLedCache,
+        kLedColorUnsynced,
+        sizeof(g_launchpadLedCache));
+  }
+}
+
 void setLaunchpadLedColor(
     byte note,
     byte color)
 {
+  // Only Launchpad LED note numbers are valid targets.
+  if (note < kLedNoteMin ||
+      note > kLedNoteMax)
+  {
+    return;
+  }
+
+  // Skip LEDs whose color has not changed. The first refresh after
+  // boot/program mode still sends every LED because the cache is
+  // initialized to kLedColorUnsynced.
+  const size_t index = note - kLedNoteMin;
+  if (g_launchpadLedCache[index] == color)
+  {
+    return;
+  }
+
+  g_launchpadLedCache[index] = color;
+
   static const uint8_t kLaunchpadSysexHeader[] =
       {
           0xF0,
@@ -96,6 +140,11 @@ void sendLaunchpadProgramMode()
       sizeof(kProgramModeSysex),
       kProgramModeSysex,
       true);
+
+  // Program mode resets the Launchpad display; force a full LED
+  // re-sync on the next refresh so the cache never lies about the
+  // hardware state.
+  resetLaunchpadLedCache();
 }
 
 static bool isChannelRecorded(uint8_t channel)
