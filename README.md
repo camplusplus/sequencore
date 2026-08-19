@@ -33,7 +33,7 @@ Connect Launchpad to Teensy host USB, but provide powered USB hub (or connect +5
 <img width="576" height="455" alt="image" src="https://github.com/user-attachments/assets/c4a9c182-ecb2-443c-afbf-27ad333ed44b" />
 
 Build and upload from the project folder with:
-~/.platformio/penv/bin/pio run -e teensy41 -t upload
+~/.platformio/penv/bin/pio run -e teensy41 -t upload -t nobuild
 
 Debug with:
 pio device monitor
