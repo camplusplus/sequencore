@@ -39,6 +39,10 @@ bool g_overdub = false;
 bool g_recordingHeldNote = false;
 uint8_t g_recordingChannelOffset = 0;
 
+byte g_lastHwNote = 0;
+byte g_lastHwVelocity = 0;
+uint8_t g_hwNotesHeld = 0;
+
 // -----------------------------------------------------------------------------
 // Timers
 // -----------------------------------------------------------------------------

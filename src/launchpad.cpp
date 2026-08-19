@@ -296,14 +296,17 @@ void stageLaunchpadPad(
     bool active)
 {
   (void)channel;
+  (void)velocity;
 
   if (!isLaunchpadGridPad(note))
   {
     return;
   }
 
-  const uint8_t row = note / 8;
-  const uint8_t col = note % 8;
+  // Map the pad note to its grid row/column (must match the LED refresh).
+  //   81..88 -> row 0, 71..78 -> row 1, ... 11..18 -> row 7
+  const uint8_t row = 8 - (note / 10);
+  const uint8_t col = (note % 10) - 1;
 
   const uint8_t step =
       (col + g_stepOffset) % kStepCount;
@@ -314,11 +317,33 @@ void stageLaunchpadPad(
   StepLaneState &lane =
       g_sequence[step][laneChannel];
 
-  lane.active = active;
-  lane.note = note + 48;
-  lane.velocity = velocity;
+  // Only a pad touch (NoteOn) edits the grid. Release leaves the
+  // sequence untouched.
+  if (!active)
+  {
+    return;
+  }
 
-  refreshLaunchpadGridLedState();
+  // 1. While holding the record button, touching a grid pad records
+  //    the last hardware MIDI keyboard note onto that step.
+  if (g_recordingHeldNote)
+  {
+    lane.active = true;
+    lane.note = g_lastHwNote;
+    lane.velocity = g_lastHwVelocity;
+
+    refreshLaunchpadGridLedState();
+    return;
+  }
+
+  // 2. Otherwise, if the hardware keyboard is not playing, touching a
+  //    grid pad removes any recorded note from that step.
+  if (g_hwNotesHeld == 0)
+  {
+    lane.active = false;
+
+    refreshLaunchpadGridLedState();
+  }
 }
 
 // -----------------------------------------------------------------------------

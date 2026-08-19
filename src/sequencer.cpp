@@ -305,27 +305,35 @@ void handleHardwareMidiIn()
 
   (void)channel;
 
-  // We only record MIDI notes while holding
-  // a Launchpad recording-channel button.
-  if (!g_recordingHeldNote)
-  {
-    return;
-  }
-
   // ---------------------------------------------------------------------------
   // NOTE ON
   // ---------------------------------------------------------------------------
 
   if (type == midi::NoteOn && data2 > 0)
   {
-    const uint8_t recordChannel =
-        g_recordingChannelOffset +
-        g_channelOffset;
+    // Remember the last hardware keyboard note so grid pads can
+    // record it while holding the record button.
+    g_lastHwNote = data1;
+    g_lastHwVelocity = data2;
 
-    recordCurrentStep(
-        recordChannel,
-        data1,
-        data2);
+    if (g_hwNotesHeld < 32)
+    {
+      ++g_hwNotesHeld;
+    }
+
+    // We only record into the current step while holding
+    // a Launchpad recording-channel button.
+    if (g_recordingHeldNote)
+    {
+      const uint8_t recordChannel =
+          g_recordingChannelOffset +
+          g_channelOffset;
+
+      recordCurrentStep(
+          recordChannel,
+          data1,
+          data2);
+    }
 
     return;
   }
@@ -337,7 +345,13 @@ void handleHardwareMidiIn()
   if (type == midi::NoteOff ||
       (type == midi::NoteOn && data2 == 0))
   {
-    // Do not modify the sequence on NoteOff.
+    // Track held notes so grid pads know if the hardware
+    // keyboard is playing. Do not modify the sequence.
+    if (g_hwNotesHeld > 0)
+    {
+      --g_hwNotesHeld;
+    }
+
     return;
   }
 }
