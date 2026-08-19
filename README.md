@@ -17,10 +17,11 @@ Progress:
 - Pressing Modifier key (Custom) should toggle modes (also colors change)
 - Pausing/Delete playback per midi channel (Custom to toggle mode: green=mute, red=delete and select right row channel)
 - Displaying steps with recorded notes
+- Step Editor: 1 Remove note — touching a note-grid pad clears any recorded note at that step. 2.Record from hardware MIDI — while holding a record button touching a note-grid pad records the last hardware keyboard note/velocity onto that step.
 
 ToDo:
 - sequence length
-- Step Editor, glide, microsteps, ratchet
+- glide, microsteps, ratchet
 - Song mode
 - Save to mircosd card
 
