@@ -243,21 +243,10 @@ void refreshLaunchpadGridLedState()
 
 void refreshLaunchpadControlLedState()
 {
-  // Turn off all top-row control LEDs.
-  for (uint8_t i = 0; i < 8; ++i)
-  {
-    setLaunchpadLedColor(
-        kLaunchpadTopRowControlNoteMin + i,
-        kLaunchpadColorOff);
-  }
-
-  // Turn off all right-column LEDs.
-  for (uint8_t i = 0; i < 80; i += 10)
-  {
-    setLaunchpadLedColor(
-        kLaunchpadRightColumnControlNoteMin + i,
-        kLaunchpadColorOff);
-  }
+  // Every pad gets its final color written directly (no off pre-clear),
+  // the same way the grid refresh works. Pre-clearing would make each lit
+  // pad receive an off/on SysEx pair on every refresh, which re-triggers
+  // the Launchpad LED driver and makes the pad visibly blink.
 
   // Channel scrolling.
   setLaunchpadLedColor(
