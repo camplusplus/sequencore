@@ -247,6 +247,60 @@ void advanceSequencerStep()
   g_hasPlayedStep = true;
 }
 
+void playAllChannelSequence()
+{
+  // Temporarily stop the sequencer.
+  const bool wasRunning = g_running;
+  g_running = false;
+
+  for (uint8_t step = 0;
+       step < kStepCount;
+       ++step)
+  {
+    for (uint8_t channel = 0;
+         channel < kMidiChannelCount;
+         ++channel)
+    {
+      StepLaneState &lane =
+          g_sequence[step][channel];
+
+      // Muted channels are not played back.
+      if (g_channelMuteMask & (1U << channel))
+      {
+        continue;
+      }
+
+      if (lane.active && !lane.muted)
+      {
+        sendMidiMessage(
+            channel,
+            lane.note,
+            lane.velocity,
+            true);
+
+        sendMidiMessage(
+            channel,
+            lane.note,
+            0,
+            false);
+      }
+    }
+
+    const uint16_t stepDuration =
+        calculateStepDurationMs();
+
+    delay(stepDuration);
+  }
+
+  // Restore sequencer state.
+  g_running = wasRunning;
+
+  if (g_running)
+  {
+    midiPort.sendStart();
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Hardware MIDI input / recording
 // -----------------------------------------------------------------------------
