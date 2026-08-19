@@ -18,7 +18,7 @@ Progress:
 - Pausing/Delete playback per midi channel (Custom to toggle mode: green=mute, red=delete and select right row channel)
 - Displaying steps with recorded notes
 - Step Editor: Record from hardware MIDI — while holding a record button touching a note-grid pad records the last hardware keyboard note/velocity onto that step.
-- Step Editor delete/mute note by pressing Modifier key and then sequence none. Hold longer for column mute.
+- Step Editor delete/mute note by pressing Modifier key and then sequence step. Hold longer for column mute.
 
 ToDo:
 - sequence length
