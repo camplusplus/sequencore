@@ -76,6 +76,7 @@ struct StepLaneState
   bool active = false;
   byte note = 60;
   byte velocity = 100;
+  bool muted = false;
 };
 
 extern StepLaneState g_sequence[kStepCount][kMidiChannelCount];
@@ -141,3 +142,19 @@ extern uint8_t g_modifierMode;
 
 // Bit N set = channel N is muted (green modifier mode).
 extern uint32_t g_channelMuteMask;
+
+// Bit N set = step N is muted (green modifier mode, touched on a grid pad).
+extern uint16_t g_stepMuteMask;
+
+// -----------------------------------------------------------------------------
+// Green-mode long-press (hold a grid pad to mute the whole step)
+// -----------------------------------------------------------------------------
+
+// Hold this long (ms) to mute the whole step instead of just the cell.
+constexpr uint16_t kGridHoldMs = 400;
+
+extern uint32_t g_gridHoldStartMs;
+extern bool g_gridHoldActive;
+extern bool g_gridHoldTriggered;
+extern uint8_t g_gridHoldStep;
+extern uint8_t g_gridHoldChannel;

@@ -49,6 +49,24 @@ void loop()
   launchpad.read();
 
   // ---------------------------------------------------------------------------
+  // Green-mode grid long-press: hold -> mute whole step
+  // ---------------------------------------------------------------------------
+
+  if (g_gridHoldActive)
+  {
+    if (!g_gridHoldTriggered &&
+        (millis() - g_gridHoldStartMs) >= kGridHoldMs)
+    {
+      g_gridHoldTriggered = true;
+
+      // Toggle mute for the whole step.
+      g_stepMuteMask ^= (1U << g_gridHoldStep);
+
+      refreshLaunchpadGridLedState();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Hardware MIDI
   // ---------------------------------------------------------------------------
 

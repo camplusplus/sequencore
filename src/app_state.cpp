@@ -66,3 +66,14 @@ byte g_lastPressedControlNote = 0xFF;
 byte g_controlFlashNote = 0xFF;
 uint8_t g_modifierMode = 0;
 uint32_t g_channelMuteMask = 0;
+uint16_t g_stepMuteMask = 0;
+
+// -----------------------------------------------------------------------------
+// Green-mode long-press
+// -----------------------------------------------------------------------------
+
+uint32_t g_gridHoldStartMs = 0;
+bool g_gridHoldActive = false;
+bool g_gridHoldTriggered = false;
+uint8_t g_gridHoldStep = 0;
+uint8_t g_gridHoldChannel = 0;

@@ -140,11 +140,29 @@ void refreshLaunchpadGridLedState()
     const uint8_t laneChannel =
         (row + g_channelOffset) % kMidiChannelCount;
 
-    setLaunchpadLedColor(
-        note,
-        g_sequence[step][laneChannel].active
-            ? kLaunchpadColorWhiteHigh
-            : kLaunchpadColorOff);
+    byte color;
+
+    // Priority: step mute (whole column) > cell mute > active > off.
+    if (g_stepMuteMask & (1U << step))
+    {
+      // Whole column muted (long-press in green mode).
+      color = kLaunchpadColorGreenLow;
+    }
+    else if (g_sequence[step][laneChannel].muted)
+    {
+      // Individual cell muted (short-press in green mode).
+      color = kLaunchpadColorGreenLow;
+    }
+    else if (g_sequence[step][laneChannel].active)
+    {
+      color = kLaunchpadColorWhiteHigh;
+    }
+    else
+    {
+      color = kLaunchpadColorOff;
+    }
+
+    setLaunchpadLedColor(note, color);
   }
 
   // Channel scrolling.
@@ -317,30 +335,60 @@ void stageLaunchpadPad(
   StepLaneState &lane =
       g_sequence[step][laneChannel];
 
-  // Only a pad touch (NoteOn) edits the grid. Release leaves the
-  // sequence untouched.
+  // Modifier mode 1 (green, pad 97):
+  //   short touch = mute/unmute just this cell (channel at that step)
+  //   long hold   = mute/unmute the whole step/column (handled in loop)
+  if (g_modifierMode == 1)
+  {
+    if (active)
+    {
+      // Start tracking the hold. The release below decides short vs long.
+      g_gridHoldStartMs = millis();
+      g_gridHoldActive = true;
+      g_gridHoldTriggered = false;
+      g_gridHoldStep = step;
+      g_gridHoldChannel = laneChannel;
+    }
+    else
+    {
+      // Release: if the hold was not long enough, toggle this cell's mute.
+      g_gridHoldActive = false;
+
+      if (!g_gridHoldTriggered)
+      {
+        lane.muted = !lane.muted;
+        refreshLaunchpadGridLedState();
+      }
+    }
+
+    return;
+  }
+
+  // Only a pad touch (NoteOn) acts on the grid. Release does nothing.
   if (!active)
   {
     return;
   }
 
-  // 1. While holding the record button, touching a grid pad records
-  //    the last hardware MIDI keyboard note onto that step.
-  if (g_recordingHeldNote)
+  // Modifier mode 2 (red, pad 97): touching a grid pad deletes the
+  // recorded note for that step/lane.
+  if (g_modifierMode == 2)
   {
-    lane.active = true;
-    lane.note = g_lastHwNote;
-    lane.velocity = g_lastHwVelocity;
+    lane.active = false;
+    lane.muted = false;
 
     refreshLaunchpadGridLedState();
     return;
   }
 
-  // 2. Otherwise, if the hardware keyboard is not playing, touching a
-  //    grid pad removes any recorded note from that step.
-  if (g_hwNotesHeld == 0)
+  // While holding the record button, touching a grid pad records
+  // the last hardware MIDI keyboard note onto that step.
+  if (g_recordingHeldNote)
   {
-    lane.active = false;
+    lane.active = true;
+    lane.muted = false;
+    lane.note = g_lastHwNote;
+    lane.velocity = g_lastHwVelocity;
 
     refreshLaunchpadGridLedState();
   }

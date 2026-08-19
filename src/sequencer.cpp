@@ -95,6 +95,7 @@ void deleteChannel(uint8_t channel)
        ++step)
   {
     g_sequence[step][channel].active = false;
+    g_sequence[step][channel].muted = false;
   }
 
   // A deleted channel is no longer muted.
@@ -127,6 +128,7 @@ void recordCurrentStep(
       g_sequence[g_stepIndex][channel];
 
   lane.active = true;
+  lane.muted = false;
   lane.note = note;
   lane.velocity = velocity;
 
@@ -139,6 +141,12 @@ void recordCurrentStep(
 
 void sendActiveStepNotes(uint8_t step)
 {
+  // Steps muted via the green modifier mode are not played.
+  if (g_stepMuteMask & (1U << step))
+  {
+    return;
+  }
+
   for (uint8_t channel = 0;
        channel < kMidiChannelCount;
        ++channel)
@@ -152,7 +160,8 @@ void sendActiveStepNotes(uint8_t step)
       continue;
     }
 
-    if (!lane.active)
+    if (!lane.active ||
+        lane.muted)
     {
       continue;
     }
@@ -205,13 +214,13 @@ void suppressLastStepNotes(uint8_t step)
     StepLaneState &lane =
         g_sequence[step][channel];
 
-    // Muted channels were never played back.
+    // Muted channels/cells were never played back.
     if (g_channelMuteMask & (1U << channel))
     {
       continue;
     }
 
-    if (lane.active)
+    if (lane.active && !lane.muted)
     {
       sendMidiMessage(
           channel,
@@ -261,7 +270,7 @@ void playAllChannelSequence()
         continue;
       }
 
-      if (lane.active)
+      if (lane.active && !lane.muted)
       {
         sendMidiMessage(
             channel,
