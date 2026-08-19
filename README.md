@@ -19,9 +19,8 @@ Progress:
 - Displaying steps with recorded notes
 
 ToDo:
-
-- Step Editor, microsteps, ratchet, sequence length
-- Simple display on note pads, internal led bpm sync
+- sequence length
+- Step Editor, glide, microsteps, ratchet
 - Song mode
 - Save to mircosd card
 
