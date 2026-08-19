@@ -499,11 +499,17 @@ void handleLaunchpadControl(byte note)
 
     if (g_running)
     {
+      // Resume cleanly: reset the step/clock timers so the next step
+      // begins on a fresh boundary. Playback then keeps looping
+      // forever until explicitly paused again.
+      g_stepTimer = 0;
+      g_clockPulseTimer = 0;
+
       midiPort.sendStart();
-      playAllChannelSequence();
     }
     else
     {
+      // Pause: stays stopped until played again.
       midiPort.sendStop();
     }
     break;

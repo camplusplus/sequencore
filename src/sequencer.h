@@ -41,7 +41,6 @@ void recordCurrentStep(
 void sendActiveStepNotes(uint8_t step);
 void suppressLastStepNotes(uint8_t step);
 void advanceSequencerStep();
-void playAllChannelSequence();
 
 // -----------------------------------------------------------------------------
 // Hardware MIDI input
