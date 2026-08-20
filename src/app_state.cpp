@@ -16,6 +16,8 @@ MIDIDevice_BigBuffer launchpad(myusb);
 
 StepLaneState g_sequence[kStepCount][kMidiChannelCount];
 
+uint8_t g_channelShuffle[kMidiChannelCount] = {0};
+
 // -----------------------------------------------------------------------------
 // Sequencer state
 // -----------------------------------------------------------------------------
@@ -31,6 +33,8 @@ uint16_t g_tempoBpm = 120;
 uint8_t g_microstepDivisions = 1;
 uint8_t g_ratchetCount = 1;
 uint8_t g_swingPct = 0;
+
+uint8_t g_lastPressedChannel = 0;
 
 bool g_running = true;
 bool g_recording = false;

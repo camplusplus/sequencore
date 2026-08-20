@@ -215,17 +215,27 @@ void refreshLaunchpadGridLedState()
   }
 
   // Channel scrolling.
+  // Pad 91 doubles as the shuffle-up pad in green modifier mode, so
+  // its LED shows the shuffle state of the last pressed channel.
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 0,
-      g_channelOffset > 0
-          ? kLaunchpadColorWhiteLow
-          : kLaunchpadColorOff);
+      g_modifierMode == 1
+          ? (g_channelShuffle[g_lastPressedChannel] > 0
+                 ? kLaunchpadColorAmberHigh
+                 : kLaunchpadColorGreenLow)
+          : (g_channelOffset > 0
+                 ? kLaunchpadColorWhiteLow
+                 : kLaunchpadColorOff));
 
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 1,
-      (g_channelOffset + 8) < kMidiChannelCount
-          ? kLaunchpadColorWhiteLow
-          : kLaunchpadColorOff);
+      g_modifierMode == 1
+          ? (g_channelShuffle[g_lastPressedChannel] >= kShuffleMax
+                 ? kLaunchpadColorAmberHigh
+                 : kLaunchpadColorGreenLow)
+          : ((g_channelOffset + 8) < kMidiChannelCount
+                 ? kLaunchpadColorWhiteLow
+                 : kLaunchpadColorOff));
 
   // Step scrolling.
   setLaunchpadLedColor(
@@ -248,18 +258,26 @@ void refreshLaunchpadControlLedState()
   // pad receive an off/on SysEx pair on every refresh, which re-triggers
   // the Launchpad LED driver and makes the pad visibly blink.
 
-  // Channel scrolling.
+  // Channel scrolling / shuffle (green modifier mode).
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 0,
-      g_channelOffset > 0
-          ? kLaunchpadColorWhiteLow
-          : kLaunchpadColorOff);
+      g_modifierMode == 1
+          ? (g_channelShuffle[g_lastPressedChannel] > 0
+                 ? kLaunchpadColorAmberHigh
+                 : kLaunchpadColorGreenLow)
+          : (g_channelOffset > 0
+                 ? kLaunchpadColorWhiteLow
+                 : kLaunchpadColorOff));
 
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 1,
-      (g_channelOffset + 8) < kMidiChannelCount
-          ? kLaunchpadColorWhiteLow
-          : kLaunchpadColorOff);
+      g_modifierMode == 1
+          ? (g_channelShuffle[g_lastPressedChannel] >= kShuffleMax
+                 ? kLaunchpadColorAmberHigh
+                 : kLaunchpadColorGreenLow)
+          : ((g_channelOffset + 8) < kMidiChannelCount
+                 ? kLaunchpadColorWhiteLow
+                 : kLaunchpadColorOff));
 
   // Step scrolling.
   setLaunchpadLedColor(
@@ -618,6 +636,16 @@ void onLaunchpadControlChange(
             10 +
         1;
 
+    const uint8_t internalChannel =
+        (channelNumber - 1) + g_channelOffset;
+
+    // Track the last pressed right-column channel pad so the green-mode
+    // shuffle pads (91/92) act on that channel.
+    if (value != 0 && internalChannel < kMidiChannelCount)
+    {
+      g_lastPressedChannel = internalChannel;
+    }
+
     // ---------------------------------------------------------------------------
     // MODIFIER MODE: mute / delete
     // ---------------------------------------------------------------------------
@@ -628,9 +656,6 @@ void onLaunchpadControlChange(
       // (Right-column pads send a CC on press and another on release.)
       if (value != 0)
       {
-        const uint8_t internalChannel =
-            (channelNumber - 1) + g_channelOffset;
-
         if (internalChannel < kMidiChannelCount)
         {
           if (g_modifierMode == 1)
@@ -707,6 +732,21 @@ void onLaunchpadControlChange(
       {
         g_modifierMode = (g_modifierMode + 1) % 3;
       }
+
+      refreshLaunchpadControlLedState();
+    }
+    else if (g_modifierMode == 1 &&
+             (control == kLaunchpadTopRowControlNoteMin + 0 ||
+              control == kLaunchpadTopRowControlNoteMin + 1) &&
+             value != 0)
+    {
+      // Green modifier mode: pad 91 = shuffle up, pad 92 = shuffle down
+      // for the last pressed channel.
+      adjustChannelShuffle(
+          g_lastPressedChannel,
+          control == kLaunchpadTopRowControlNoteMin + 0
+              ? 1
+              : -1);
 
       refreshLaunchpadControlLedState();
     }

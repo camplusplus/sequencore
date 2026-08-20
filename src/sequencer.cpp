@@ -135,6 +135,30 @@ void recordCurrentStep(
   refreshLaunchpadGridLedState();
 }
 
+void adjustChannelShuffle(uint8_t channel, int8_t delta)
+{
+  if (channel >= kMidiChannelCount)
+  {
+    return;
+  }
+
+  const int16_t newShuffle =
+      static_cast<int16_t>(g_channelShuffle[channel]) + delta;
+
+  if (newShuffle < 0)
+  {
+    g_channelShuffle[channel] = 0;
+  }
+  else if (newShuffle > kShuffleMax)
+  {
+    g_channelShuffle[channel] = kShuffleMax;
+  }
+  else
+  {
+    g_channelShuffle[channel] = static_cast<uint8_t>(newShuffle);
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Playback
 // -----------------------------------------------------------------------------
@@ -166,15 +190,27 @@ void sendActiveStepNotes(uint8_t step)
       continue;
     }
 
+    // Swing and per-channel shuffle both delay odd steps.
+    // Shuffle is set per channel (green mode pads 91/92).
     const uint16_t swingDelayUs =
         (step % 2 == 1 && g_swingPct > 0)
             ? (calculateStepDurationMs() * g_swingPct / 100U) *
                   1000U / 2U
             : 0;
 
-    if (swingDelayUs > 0)
+    const uint16_t shuffleDelayUs =
+        (step % 2 == 1 && g_channelShuffle[channel] > 0)
+            ? (calculateStepDurationMs() *
+               g_channelShuffle[channel] / 100U) *
+                  1000U / 2U
+            : 0;
+
+    const uint16_t oddStepDelayUs =
+        swingDelayUs + shuffleDelayUs;
+
+    if (oddStepDelayUs > 0)
     {
-      delayMicroseconds(swingDelayUs);
+      delayMicroseconds(oddStepDelayUs);
     }
 
     for (uint8_t ratchet = 0;

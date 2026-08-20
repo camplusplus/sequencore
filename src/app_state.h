@@ -48,6 +48,7 @@ constexpr uint16_t kMaxTempoBpm = 200;
 constexpr uint8_t kRatchetMax = 4;
 constexpr uint8_t kMicrostepMax = 8;
 constexpr uint8_t kSwingMax = 50;
+constexpr uint8_t kShuffleMax = 50;
 
 constexpr uint8_t kLaunchpadColorOff = 0;
 constexpr uint8_t kLaunchpadColorWhiteLow = 1;
@@ -81,6 +82,10 @@ struct StepLaneState
 
 extern StepLaneState g_sequence[kStepCount][kMidiChannelCount];
 
+// Per-channel shuffle (0..kShuffleMax). Applied to odd steps, in sync
+// with swing (odd-step microsecond delay), but independent of it.
+extern uint8_t g_channelShuffle[kMidiChannelCount];
+
 // -----------------------------------------------------------------------------
 // Sequencer state
 // -----------------------------------------------------------------------------
@@ -96,6 +101,11 @@ extern uint16_t g_tempoBpm;
 extern uint8_t g_microstepDivisions;
 extern uint8_t g_ratchetCount;
 extern uint8_t g_swingPct;
+
+// Channel corresponding to the most recently pressed right-column
+// channel pad. Shuffle up/down pads (91/92) act on this channel while
+// the green modifier is active.
+extern uint8_t g_lastPressedChannel;
 
 extern bool g_running;
 extern bool g_recording;
@@ -136,7 +146,8 @@ extern byte g_controlFlashNote;
 
 // Pad 97 modifier mode (3-state toggle, cycles on press).
 // 0 = none (LED off)
-// 1 = green (right column pads = mute channel)
+// 1 = green (right column pads = mute channel; grid pads = mute cell/step;
+//             top row 91 = shuffle up, 92 = shuffle down)
 // 2 = red (right column pads = delete channel)
 extern uint8_t g_modifierMode;
 
