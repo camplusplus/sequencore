@@ -18,6 +18,10 @@ extern midi::MidiInterface<midi::SerialMIDI<HardwareSerial>> midiPort;
 // Number of DIN MIDI output ports the sequencer broadcasts to.
 constexpr uint8_t kMidiOutPortCount = 6;
 
+// Substep divisions per step (1..kMicrostepMax). When > 1, each step is
+// split into equal substep slots that can each hold a note.
+constexpr uint8_t kMicrostepDivisionsDefault = 1;
+
 // Broadcast the same MIDI message to all six DIN output pins.
 void midiOutBeginAll(byte channel);
 void midiOutSendNoteOn(byte note, byte velocity, byte channel);
@@ -93,12 +97,43 @@ constexpr uint8_t kLaunchpadColorGreenHigh = 18;
 // Sequence state
 // -----------------------------------------------------------------------------
 
-struct StepLaneState
+// One substep slot. Slot 0 is the main note played at the step start.
+// Higher slots play at (k-1) * (step / g_microstepDivisions).
+struct SubstepNote
 {
   bool active = false;
   byte note = 60;
   byte velocity = 100;
+};
+
+struct StepLaneState
+{
+  SubstepNote substep[kMicrostepMax];
   bool muted = false;
+
+  bool isSubstepActive() const
+  {
+    for (uint8_t i = 0; i < kMicrostepMax; ++i)
+    {
+      if (substep[i].active)
+      {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Returns true if slot k is active; otherwise false.
+  bool getSubstep(uint8_t k, byte *outNote, byte *outVelocity) const
+  {
+    if (k >= kMicrostepMax || !substep[k].active)
+    {
+      return false;
+    }
+    *outNote = substep[k].note;
+    *outVelocity = substep[k].velocity;
+    return true;
+  }
 };
 
 extern StepLaneState g_sequence[kMaxSequenceLength][kMidiChannelCount];
@@ -171,7 +206,9 @@ extern byte g_controlFlashNote;
 // Pad 97 modifier mode (3-state toggle, cycles on press).
 // 0 = none (LED off)
 // 1 = green (right column pads = mute channel; grid pads = mute cell/step;
-//             top row 91 = shuffle up, 92 = shuffle down)
+//             top row 91 = shuffle up, 92 = shuffle down,
+//                       93 = sequence length down, 94 = sequence length up,
+//                       95 = microstep division down, 96 = microstep division up)
 // 2 = red (right column pads = delete channel)
 extern uint8_t g_modifierMode;
 
@@ -193,3 +230,19 @@ extern bool g_gridHoldActive;
 extern bool g_gridHoldTriggered;
 extern uint8_t g_gridHoldStep;
 extern uint8_t g_gridHoldChannel;
+
+// -----------------------------------------------------------------------------
+// Substep editing mode (pads 95/96 green mode)
+// -----------------------------------------------------------------------------
+
+// When true, each grid pad records into the currently-cycling substep slot
+// of that channel/step (Novation Circuit-style). Slot 0 is the main note.
+extern bool g_substepEditing;
+
+// Tracks a long-press on a single grid pad to cycle the substep slot
+// (green-mode + substep editing).
+extern uint32_t g_substepHoldStartMs;
+extern bool g_substepHoldActive;
+extern bool g_substepHoldTriggered;
+extern uint8_t g_substepHoldStep;
+extern uint8_t g_substepHoldChannel;

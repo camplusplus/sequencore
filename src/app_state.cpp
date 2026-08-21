@@ -156,3 +156,19 @@ bool g_gridHoldActive = false;
 bool g_gridHoldTriggered = false;
 uint8_t g_gridHoldStep = 0;
 uint8_t g_gridHoldChannel = 0;
+
+// -----------------------------------------------------------------------------
+// Substep editing mode (pads 95/96 green mode)
+// -----------------------------------------------------------------------------
+
+// When true, each grid pad records into the currently-cycling substep slot
+// of that channel/step (Novation Circuit-style). Slot 0 is the main note.
+bool g_substepEditing = false;
+
+// Tracks a long-press on a single grid pad to cycle the substep slot
+// (green-mode + substep editing). Used for the note-off handler.
+uint32_t g_substepHoldStartMs = 0;
+bool g_substepHoldActive = false;
+bool g_substepHoldTriggered = false;
+uint8_t g_substepHoldStep = 0;
+uint8_t g_substepHoldChannel = 0;
