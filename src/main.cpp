@@ -60,7 +60,10 @@ void loop()
       g_gridHoldTriggered = true;
 
       // Toggle mute for the whole step.
-      g_stepMuteMask ^= (1U << g_gridHoldStep);
+      if (g_gridHoldStep < g_sequenceLength)
+      {
+        g_stepMuted[g_gridHoldStep] = !g_stepMuted[g_gridHoldStep];
+      }
 
       refreshLaunchpadGridLedState();
     }

@@ -31,6 +31,8 @@ void deleteChannel(uint8_t channel);
 
 void adjustChannelShuffle(uint8_t channel, int8_t delta);
 
+void adjustSequenceLength(int8_t delta);
+
 void recordCurrentStep(
     uint8_t channel,
     byte note,

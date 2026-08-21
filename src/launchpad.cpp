@@ -155,7 +155,7 @@ static bool isChannelRecorded(uint8_t channel)
   }
 
   for (uint8_t step = 0;
-       step < kStepCount;
+       step < g_sequenceLength;
        ++step)
   {
     if (g_sequence[step][channel].active)
@@ -180,11 +180,18 @@ void refreshLaunchpadGridLedState()
 
     // Grid pads show the sequence step for the visible column.
     // Steps with a recorded note light up white; empty steps stay off.
+    // Columns beyond the current sequence length stay off.
     const uint8_t row = 8 - (note / 10);
     const uint8_t col = (note % 10) - 1;
 
+    if ((uint16_t)g_stepOffset + col >= g_sequenceLength)
+    {
+      setLaunchpadLedColor(note, kLaunchpadColorOff);
+      continue;
+    }
+
     const uint8_t step =
-        (col + g_stepOffset) % kStepCount;
+        g_stepOffset + col;
 
     const uint8_t laneChannel =
         (row + g_channelOffset) % kMidiChannelCount;
@@ -192,7 +199,7 @@ void refreshLaunchpadGridLedState()
     byte color;
 
     // Priority: step mute (whole column) > cell mute > active > off.
-    if (g_stepMuteMask & (1U << step))
+    if (g_stepMuted[step])
     {
       // Whole column muted (long-press in green mode).
       color = kLaunchpadColorGreenLow;
@@ -237,18 +244,26 @@ void refreshLaunchpadGridLedState()
                  ? kLaunchpadColorWhiteLow
                  : kLaunchpadColorOff));
 
-  // Step scrolling.
+  // Step scrolling / sequence length (green modifier mode).
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 2,
-      g_stepOffset > 0
-          ? kLaunchpadColorWhiteLow
-          : kLaunchpadColorOff);
+      g_modifierMode == 1
+          ? (g_sequenceLength <= kMinSequenceLength
+                 ? kLaunchpadColorAmberHigh
+                 : kLaunchpadColorGreenLow)
+          : (g_stepOffset > 0
+                 ? kLaunchpadColorWhiteLow
+                 : kLaunchpadColorOff));
 
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 3,
-      (g_stepOffset + 8) < kStepCount
-          ? kLaunchpadColorWhiteLow
-          : kLaunchpadColorOff);
+      g_modifierMode == 1
+          ? (g_sequenceLength >= kMaxSequenceLength
+                 ? kLaunchpadColorAmberHigh
+                 : kLaunchpadColorGreenLow)
+          : ((g_stepOffset + 8) < g_sequenceLength
+                 ? kLaunchpadColorWhiteLow
+                 : kLaunchpadColorOff));
 }
 
 void refreshLaunchpadControlLedState()
@@ -279,18 +294,26 @@ void refreshLaunchpadControlLedState()
                  ? kLaunchpadColorWhiteLow
                  : kLaunchpadColorOff));
 
-  // Step scrolling.
+  // Step scrolling / sequence length (green modifier mode).
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 2,
-      g_stepOffset > 0
-          ? kLaunchpadColorWhiteLow
-          : kLaunchpadColorOff);
+      g_modifierMode == 1
+          ? (g_sequenceLength <= kMinSequenceLength
+                 ? kLaunchpadColorAmberHigh
+                 : kLaunchpadColorGreenLow)
+          : (g_stepOffset > 0
+                 ? kLaunchpadColorWhiteLow
+                 : kLaunchpadColorOff));
 
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 3,
-      (g_stepOffset + 8) < kStepCount
-          ? kLaunchpadColorWhiteLow
-          : kLaunchpadColorOff);
+      g_modifierMode == 1
+          ? (g_sequenceLength >= kMaxSequenceLength
+                 ? kLaunchpadColorAmberHigh
+                 : kLaunchpadColorGreenLow)
+          : ((g_stepOffset + 8) < g_sequenceLength
+                 ? kLaunchpadColorWhiteLow
+                 : kLaunchpadColorOff));
 
   // Tempo.
   setLaunchpadLedColor(
@@ -382,8 +405,13 @@ void stageLaunchpadPad(
   const uint8_t row = 8 - (note / 10);
   const uint8_t col = (note % 10) - 1;
 
+  const uint16_t visibleStep =
+      (uint16_t)g_stepOffset + col;
+
   const uint8_t step =
-      (col + g_stepOffset) % kStepCount;
+      (visibleStep >= g_sequenceLength)
+          ? 0
+          : (uint8_t)visibleStep;
 
   const uint8_t laneChannel =
       (row + g_channelOffset) % kMidiChannelCount;
@@ -398,6 +426,12 @@ void stageLaunchpadPad(
   {
     if (active)
     {
+      // Pads in columns beyond the sequence length do nothing.
+      if (visibleStep >= g_sequenceLength)
+      {
+        return;
+      }
+
       // Start tracking the hold. The release below decides short vs long.
       g_gridHoldStartMs = millis();
       g_gridHoldActive = true;
@@ -410,9 +444,13 @@ void stageLaunchpadPad(
       // Release: if the hold was not long enough, toggle this cell's mute.
       g_gridHoldActive = false;
 
-      if (!g_gridHoldTriggered)
+      if (!g_gridHoldTriggered &&
+          g_gridHoldStep < g_sequenceLength)
       {
-        lane.muted = !lane.muted;
+        StepLaneState &heldLane =
+            g_sequence[g_gridHoldStep][g_gridHoldChannel];
+
+        heldLane.muted = !heldLane.muted;
         refreshLaunchpadGridLedState();
       }
     }
@@ -422,6 +460,12 @@ void stageLaunchpadPad(
 
   // Only a pad touch (NoteOn) acts on the grid. Release does nothing.
   if (!active)
+  {
+    return;
+  }
+
+  // Pads in columns beyond the sequence length are not actionable.
+  if (visibleStep >= g_sequenceLength)
   {
     return;
   }
@@ -511,7 +555,7 @@ void handleLaunchpadControl(byte note)
     break;
 
   case kLaunchpadTopRowControlNoteMin + 3:
-    if ((g_stepOffset + 8) < kStepCount)
+    if ((g_stepOffset + 8) < g_sequenceLength)
     {
       g_stepOffset += 8;
     }
@@ -737,18 +781,36 @@ void onLaunchpadControlChange(
     }
     else if (g_modifierMode == 1 &&
              (control == kLaunchpadTopRowControlNoteMin + 0 ||
-              control == kLaunchpadTopRowControlNoteMin + 1) &&
+              control == kLaunchpadTopRowControlNoteMin + 1 ||
+              control == kLaunchpadTopRowControlNoteMin + 2 ||
+              control == kLaunchpadTopRowControlNoteMin + 3) &&
              value != 0)
     {
-      // Green modifier mode: pad 91 = shuffle up, pad 92 = shuffle down
-      // for the last pressed channel.
-      adjustChannelShuffle(
-          g_lastPressedChannel,
-          control == kLaunchpadTopRowControlNoteMin + 0
-              ? 1
-              : -1);
+      if (control == kLaunchpadTopRowControlNoteMin + 0)
+      {
+        // Green modifier mode: pad 91 = shuffle up
+        // for the last pressed channel.
+        adjustChannelShuffle(g_lastPressedChannel, 1);
+      }
+      else if (control == kLaunchpadTopRowControlNoteMin + 1)
+      {
+        // Green modifier mode: pad 92 = shuffle down
+        // for the last pressed channel.
+        adjustChannelShuffle(g_lastPressedChannel, -1);
+      }
+      else if (control == kLaunchpadTopRowControlNoteMin + 2)
+      {
+        // Green modifier mode: pad 93 = sequence length down.
+        adjustSequenceLength(-8);
+      }
+      else
+      {
+        // Green modifier mode: pad 94 = sequence length up.
+        adjustSequenceLength(8);
+      }
 
       refreshLaunchpadControlLedState();
+      refreshLaunchpadGridLedState();
     }
     else if (value != 0)
     {

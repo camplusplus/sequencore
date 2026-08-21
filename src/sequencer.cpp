@@ -91,7 +91,7 @@ void deleteChannel(uint8_t channel)
   }
 
   for (uint8_t step = 0;
-       step < kStepCount;
+       step < kMaxSequenceLength;
        ++step)
   {
     g_sequence[step][channel].active = false;
@@ -159,6 +159,39 @@ void adjustChannelShuffle(uint8_t channel, int8_t delta)
   }
 }
 
+void adjustSequenceLength(int8_t delta)
+{
+  const int16_t newLength =
+      static_cast<int16_t>(g_sequenceLength) + delta;
+
+  if (newLength < kMinSequenceLength)
+  {
+    g_sequenceLength = kMinSequenceLength;
+  }
+  else if (newLength > kMaxSequenceLength)
+  {
+    g_sequenceLength = kMaxSequenceLength;
+  }
+  else
+  {
+    g_sequenceLength = static_cast<uint8_t>(newLength);
+  }
+
+  // Keep the step offset within the visible range.
+  if (g_stepOffset + 8 > g_sequenceLength)
+  {
+    g_stepOffset = 0;
+  }
+
+  // Clear mute flags on steps that are no longer part of the sequence.
+  for (uint8_t step = g_sequenceLength;
+       step < kMaxSequenceLength;
+       ++step)
+  {
+    g_stepMuted[step] = false;
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Playback
 // -----------------------------------------------------------------------------
@@ -166,7 +199,8 @@ void adjustChannelShuffle(uint8_t channel, int8_t delta)
 void sendActiveStepNotes(uint8_t step)
 {
   // Steps muted via the green modifier mode are not played.
-  if (g_stepMuteMask & (1U << step))
+  if (step < g_sequenceLength &&
+      g_stepMuted[step])
   {
     return;
   }
@@ -278,7 +312,7 @@ void advanceSequencerStep()
 
   g_lastPlayedStep = g_stepIndex;
   g_stepIndex =
-      (g_stepIndex + 1) % kStepCount;
+      (g_stepIndex + 1) % g_sequenceLength;
 
   g_hasPlayedStep = true;
 }

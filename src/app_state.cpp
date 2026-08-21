@@ -14,7 +14,9 @@ MIDIDevice_BigBuffer launchpad(myusb);
 // Sequence state
 // -----------------------------------------------------------------------------
 
-StepLaneState g_sequence[kStepCount][kMidiChannelCount];
+StepLaneState g_sequence[kMaxSequenceLength][kMidiChannelCount];
+
+uint8_t g_sequenceLength = kDefaultSequenceLength;
 
 uint8_t g_channelShuffle[kMidiChannelCount] = {0};
 
@@ -70,7 +72,7 @@ byte g_lastPressedControlNote = 0xFF;
 byte g_controlFlashNote = 0xFF;
 uint8_t g_modifierMode = 0;
 uint32_t g_channelMuteMask = 0;
-uint16_t g_stepMuteMask = 0;
+bool g_stepMuted[kMaxSequenceLength] = {false};
 
 // -----------------------------------------------------------------------------
 // Green-mode long-press

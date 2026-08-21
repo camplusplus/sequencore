@@ -19,10 +19,10 @@ Progress:
 - Displaying steps with recorded notes
 - Step Editor: Record from hardware MIDI — while holding a record button touching a note-grid pad records the last hardware keyboard note/velocity onto that step.
 - Step Editor delete/mute note by pressing Modifier key and then sequence step. Hold longer for column mute.
-- Shuffle: in Modifier green mode, pad 91 increases and pad 92 decreases the shuffle of the last pressed channel.
+- Shuffle: in Modifier green mode, pad up increases and pad down decreases the shuffle of the last pressed channel.
+- Sequence length: in Modifier green mode, pad left decreases and pad right increases the sequence length (4..64 steps, default 16).
 
 ToDo:
-- sequence length
 - glide, microsteps, ratchet
 - Song mode
 - Save to mircosd card

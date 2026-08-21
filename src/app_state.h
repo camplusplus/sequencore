@@ -18,7 +18,9 @@ extern MIDIDevice_BigBuffer launchpad;
 // Constants
 // -----------------------------------------------------------------------------
 
-constexpr uint8_t kStepCount = 16;
+constexpr uint8_t kMinSequenceLength = 4;
+constexpr uint8_t kMaxSequenceLength = 64;
+constexpr uint8_t kDefaultSequenceLength = 16;
 constexpr uint8_t kMidiChannelCount = 16;
 
 constexpr uint8_t kLaunchpadGridNoteMin = 11;
@@ -80,7 +82,10 @@ struct StepLaneState
   bool muted = false;
 };
 
-extern StepLaneState g_sequence[kStepCount][kMidiChannelCount];
+extern StepLaneState g_sequence[kMaxSequenceLength][kMidiChannelCount];
+
+// Current sequence length in steps (kMinSequenceLength..kMaxSequenceLength).
+extern uint8_t g_sequenceLength;
 
 // Per-channel shuffle (0..kShuffleMax). Applied to odd steps, in sync
 // with swing (odd-step microsecond delay), but independent of it.
@@ -154,8 +159,8 @@ extern uint8_t g_modifierMode;
 // Bit N set = channel N is muted (green modifier mode).
 extern uint32_t g_channelMuteMask;
 
-// Bit N set = step N is muted (green modifier mode, touched on a grid pad).
-extern uint16_t g_stepMuteMask;
+// Step N is muted (green modifier mode, long-press on a grid pad).
+extern bool g_stepMuted[kMaxSequenceLength];
 
 // -----------------------------------------------------------------------------
 // Green-mode long-press (hold a grid pad to mute the whole step)
