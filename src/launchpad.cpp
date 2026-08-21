@@ -605,12 +605,12 @@ void handleLaunchpadControl(byte note)
       g_stepTimer = 0;
       g_clockPulseTimer = 0;
 
-      midiPort.sendStart();
+      midiOutSendStart();
     }
     else
     {
       // Pause: stays stopped until played again.
-      midiPort.sendStop();
+      midiOutSendStop();
     }
     break;
 
@@ -753,7 +753,7 @@ void onLaunchpadControlChange(
         g_stepTimer = 0;
         g_clockPulseTimer = 0;
 
-        midiPort.sendStart();
+        midiOutSendStart();
       }
 
       refreshLaunchpadControlLedState();
@@ -800,12 +800,12 @@ void onLaunchpadControlChange(
       }
       else if (control == kLaunchpadTopRowControlNoteMin + 2)
       {
-        // Green modifier mode: pad 93 = sequence length down.
+        // Green modifier mode: pad 93 = sequence length 8 steps down.
         adjustSequenceLength(-8);
       }
       else
       {
-        // Green modifier mode: pad 94 = sequence length up.
+        // Green modifier mode: pad 94 = sequence length 8 steps up.
         adjustSequenceLength(8);
       }
 

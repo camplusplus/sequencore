@@ -15,6 +15,10 @@ void setup()
 
   midiPort.begin(MIDI_CHANNEL_OMNI);
 
+  // Begin all six DIN MIDI output ports so the same data is
+  // broadcast to every output pin.
+  midiOutBeginAll(MIDI_CHANNEL_OMNI);
+
   // ---------------------------------------------------------------------------
   // Launchpad callbacks
   // ---------------------------------------------------------------------------
@@ -76,6 +80,10 @@ void loop()
   if (midiPort.read())
   {
     handleHardwareMidiIn();
+
+    // Flash the built-in LED on any incoming MIDI message.
+    g_ledFlashTimer = 0;
+    digitalWriteFast(LED_BUILTIN, HIGH);
   }
 
   // ---------------------------------------------------------------------------
@@ -111,15 +119,13 @@ void loop()
   }
 
   // ---------------------------------------------------------------------------
-  // Built-in LED heartbeat
+  // Built-in LED: auto-clear the MIDI input flash
   // ---------------------------------------------------------------------------
 
-  if (g_ledTimer >= 250)
+  if (g_ledFlashTimer >= kLedFlashMs)
   {
-    g_ledTimer = 0;
+    g_ledFlashTimer = 0;
 
-    digitalWriteFast(
-        LED_BUILTIN,
-        !digitalReadFast(LED_BUILTIN));
+    digitalWriteFast(LED_BUILTIN, LOW);
   }
 }

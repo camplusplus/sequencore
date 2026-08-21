@@ -8,7 +8,26 @@
 // MIDI / USB hardware
 // -----------------------------------------------------------------------------
 
+// Hardware DIN MIDI (Teensy 4.1).
+// MIDI input: Serial1 RX (pin 0), wrapped by midiPort for parsing.
+// MIDI output: the same data is broadcast to all six hardware serial TX
+// pins - Serial1 (pin 1), Serial2 (pin 8), Serial3 (pin 14), Serial4
+// (pin 17), Serial5 (pin 20) and Serial6 (pin 24).
 extern midi::MidiInterface<midi::SerialMIDI<HardwareSerial>> midiPort;
+
+// Number of DIN MIDI output ports the sequencer broadcasts to.
+constexpr uint8_t kMidiOutPortCount = 6;
+
+// Broadcast the same MIDI message to all six DIN output pins.
+void midiOutBeginAll(byte channel);
+void midiOutSendNoteOn(byte note, byte velocity, byte channel);
+void midiOutSendNoteOff(byte note, byte velocity, byte channel);
+void midiOutSendClock();
+void midiOutSendStart();
+void midiOutSendStop();
+
+// Duration (ms) the built-in LED stays on after a MIDI input flash.
+constexpr uint16_t kLedFlashMs = 30;
 
 extern USBHost myusb;
 extern USBHub hub1;
@@ -133,7 +152,7 @@ extern uint8_t g_hwNotesHeld;
 
 extern elapsedMillis g_stepTimer;
 extern elapsedMillis g_clockPulseTimer;
-extern elapsedMillis g_ledTimer;
+extern elapsedMillis g_ledFlashTimer;
 extern elapsedMillis g_statusTimer;
 extern elapsedMillis g_launchpadInitTimer;
 

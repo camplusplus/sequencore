@@ -45,14 +45,14 @@ void sendMidiMessage(
 
   if (noteOn)
   {
-    midiPort.sendNoteOn(
+    midiOutSendNoteOn(
         note,
         velocity,
         midiChannel);
   }
   else
   {
-    midiPort.sendNoteOff(
+    midiOutSendNoteOff(
         note,
         velocity,
         midiChannel);
@@ -66,7 +66,7 @@ void sendStepClockPulse()
     return;
   }
 
-  midiPort.sendClock();
+  midiOutSendClock();
 }
 
 // -----------------------------------------------------------------------------

@@ -4,7 +4,80 @@
 // MIDI / USB hardware
 // -----------------------------------------------------------------------------
 
+// Teensy 4.1 hardware UART TX pins:
+//   Serial1 TX = pin 1,  Serial2 TX = pin 8,
+//   Serial3 TX = pin 14, Serial4 TX = pin 17,
+//   Serial5 TX = pin 20, Serial6 TX = pin 24.
+// MIDI input uses Serial1 RX (pin 0) via midiPort.
+// All MIDI output is broadcast on all six TX pins above.
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, midiPort);
+MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, midiOut1);
+MIDI_CREATE_INSTANCE(HardwareSerial, Serial2, midiOut2);
+MIDI_CREATE_INSTANCE(HardwareSerial, Serial3, midiOut3);
+MIDI_CREATE_INSTANCE(HardwareSerial, Serial4, midiOut4);
+MIDI_CREATE_INSTANCE(HardwareSerial, Serial5, midiOut5);
+MIDI_CREATE_INSTANCE(HardwareSerial, Serial6, midiOut6);
+
+midi::MidiInterface<midi::SerialMIDI<HardwareSerial>> *kMidiOutPorts[
+    kMidiOutPortCount] = {
+    &midiOut1,
+    &midiOut2,
+    &midiOut3,
+    &midiOut4,
+    &midiOut5,
+    &midiOut6};
+
+// -----------------------------------------------------------------------------
+// Broadcast helpers: send the same MIDI message on all six DIN output pins
+// -----------------------------------------------------------------------------
+
+void midiOutBeginAll(byte channel)
+{
+  for (uint8_t i = 0; i < kMidiOutPortCount; ++i)
+  {
+    kMidiOutPorts[i]->begin(channel);
+  }
+}
+
+void midiOutSendNoteOn(byte note, byte velocity, byte channel)
+{
+  for (uint8_t i = 0; i < kMidiOutPortCount; ++i)
+  {
+    kMidiOutPorts[i]->sendNoteOn(note, velocity, channel);
+  }
+}
+
+void midiOutSendNoteOff(byte note, byte velocity, byte channel)
+{
+  for (uint8_t i = 0; i < kMidiOutPortCount; ++i)
+  {
+    kMidiOutPorts[i]->sendNoteOff(note, velocity, channel);
+  }
+}
+
+void midiOutSendClock()
+{
+  for (uint8_t i = 0; i < kMidiOutPortCount; ++i)
+  {
+    kMidiOutPorts[i]->sendClock();
+  }
+}
+
+void midiOutSendStart()
+{
+  for (uint8_t i = 0; i < kMidiOutPortCount; ++i)
+  {
+    kMidiOutPorts[i]->sendStart();
+  }
+}
+
+void midiOutSendStop()
+{
+  for (uint8_t i = 0; i < kMidiOutPortCount; ++i)
+  {
+    kMidiOutPorts[i]->sendStop();
+  }
+}
 
 USBHost myusb;
 USBHub hub1(myusb);
@@ -55,7 +128,7 @@ uint8_t g_hwNotesHeld = 0;
 
 elapsedMillis g_stepTimer;
 elapsedMillis g_clockPulseTimer;
-elapsedMillis g_ledTimer;
+elapsedMillis g_ledFlashTimer;
 elapsedMillis g_statusTimer;
 elapsedMillis g_launchpadInitTimer;
 
