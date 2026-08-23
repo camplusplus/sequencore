@@ -24,7 +24,7 @@ Progress:
 - Teensy 4.1 hardware UART TX pins: Serial1 TX = pin 1, Serial2 TX = pin 8, Serial3 TX = pin 14, Serial4 TX = pin 17, Serial5 TX = pin 20, Serial6 TX = pin 24. Use any or all.
 
 ToDo:
-- glide, microsteps, ratchet
+- microsteps
 - Song mode
 - Save to mircosd card
 

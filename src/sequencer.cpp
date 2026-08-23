@@ -18,9 +18,7 @@ uint16_t calculateStepDurationMs()
           static_cast<float>(g_tempoBpm) /
           4.0f);
 
-  return (g_microstepDivisions > 1)
-      ? (stepMs / g_microstepDivisions)
-      : stepMs;
+  return stepMs / kMicrostepDivisionsDefault;
 }
 
 uint16_t calculateClockPulseMs()
@@ -411,9 +409,6 @@ void debugPrintState()
 {
   Serial.print("tempo=");
   Serial.print(g_tempoBpm);
-
-  Serial.print(" micro=");
-  Serial.print(g_microstepDivisions);
 
   Serial.print(" swing=");
   Serial.print(g_swingPct);

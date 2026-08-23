@@ -580,17 +580,6 @@ void handleLaunchpadControl(byte note)
     break;
 
     // ---------------------------------------------------------------------------
-    // Microsteps
-    // ---------------------------------------------------------------------------
-
-    // case kLaunchpadTopRowControlNoteMin + 6:
-    //   g_microstepDivisions =
-    //       (g_microstepDivisions >= kMicrostepMax)
-    //           ? 1
-    //           : (g_microstepDivisions * 2);
-    //   break;
-
-    // ---------------------------------------------------------------------------
     // Play / stop
     // ---------------------------------------------------------------------------
 

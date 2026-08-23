@@ -20,7 +20,7 @@ constexpr uint8_t kMidiOutPortCount = 6;
 
 // Substep divisions per step (1..kMicrostepMax). When > 1, each step is
 // split into equal substep slots that can each hold a note.
-constexpr uint8_t kMicrostepDivisionsDefault = 1;
+constexpr uint8_t kMicrostepDivisionsDefault = 8;
 
 // Broadcast the same MIDI message to all six DIN output pins.
 void midiOutBeginAll(byte channel);
@@ -98,7 +98,7 @@ constexpr uint8_t kLaunchpadColorGreenHigh = 18;
 // -----------------------------------------------------------------------------
 
 // One substep slot. Slot 0 is the main note played at the step start.
-// Higher slots play at (k-1) * (step / g_microstepDivisions).
+// Higher slots play at (k-1) * (step / microstep Divisions).
 struct SubstepNote
 {
   bool active = false;
@@ -160,7 +160,6 @@ extern uint8_t g_lastPlayedStep;
 extern bool g_hasPlayedStep;
 
 extern uint16_t g_tempoBpm;
-extern uint8_t g_microstepDivisions;
 extern uint8_t g_ratchetCount;
 extern uint8_t g_swingPct;
 
