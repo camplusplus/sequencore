@@ -106,6 +106,7 @@ uint8_t g_lastPlayedStep = 0;
 bool g_hasPlayedStep = false;
 
 uint16_t g_tempoBpm = 120;
+uint8_t g_ratchetCount = 1;
 uint8_t g_swingPct = 0;
 
 uint8_t g_lastPressedChannel = 0;

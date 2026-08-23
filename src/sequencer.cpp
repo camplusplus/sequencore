@@ -7,18 +7,15 @@
 // Timing
 // -----------------------------------------------------------------------------
 
-// Duration of one substep slot. The step itself stays same.
-// the substep divisions only subdivide that
-// step into equal slots for one-shot notes (k > 0).
+// Duration of one step (a 16th note at the current tempo).
+// Microsteps only subdivide this step into equal slots; the
+// step itself keeps this full length.
 uint16_t calculateStepDurationMs()
 {
-  const uint16_t stepMs =
-      static_cast<uint16_t>(
-          60000.0f /
-          static_cast<float>(g_tempoBpm) /
-          4.0f);
-
-  return stepMs / kMicrostepDivisionsDefault;
+  return static_cast<uint16_t>(
+      60000.0f /
+      static_cast<float>(g_tempoBpm) /
+      4.0f);
 }
 
 uint16_t calculateClockPulseMs()
@@ -236,7 +233,9 @@ void sendActiveStepNotes(uint8_t step)
       continue;
     }
 
-    if (!lane.active ||
+    // Only slot 0 is recorded so far, so the lane is active
+    // iff slot 0 is active.
+    if (!lane.isSubstepActive() ||
         lane.muted)
     {
       continue;
@@ -271,13 +270,13 @@ void sendActiveStepNotes(uint8_t step)
     {
       sendMidiMessage(
           channel,
-          lane.note,
-          lane.velocity,
+          lane.substep[0].note,
+          lane.substep[0].velocity,
           true);
 
       sendMidiMessage(
           channel,
-          lane.note,
+          lane.substep[0].note,
           0,
           false);
 

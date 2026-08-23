@@ -158,7 +158,7 @@ static bool isChannelRecorded(uint8_t channel)
        step < g_sequenceLength;
        ++step)
   {
-    if (g_sequence[step][channel].active)
+    if (g_sequence[step][channel].isSubstepActive())
     {
       return true;
     }
@@ -209,7 +209,7 @@ void refreshLaunchpadGridLedState()
       // Individual cell muted (short-press in green mode).
       color = kLaunchpadColorGreenLow;
     }
-    else if (g_sequence[step][laneChannel].active)
+    else if (g_sequence[step][laneChannel].isSubstepActive())
     {
       color = kLaunchpadColorWhiteHigh;
     }
@@ -474,7 +474,11 @@ void stageLaunchpadPad(
   // recorded note for that step/lane.
   if (g_modifierMode == 2)
   {
-    lane.active = false;
+    for (uint8_t k = 0; k < kMicrostepMax; ++k)
+    {
+      lane.substep[k].active = false;
+    }
+
     lane.muted = false;
 
     refreshLaunchpadGridLedState();
@@ -485,10 +489,10 @@ void stageLaunchpadPad(
   // the last hardware MIDI keyboard note onto that step.
   if (g_recordingHeldNote)
   {
-    lane.active = true;
+    lane.substep[0].active = true;
     lane.muted = false;
-    lane.note = g_lastHwNote;
-    lane.velocity = g_lastHwVelocity;
+    lane.substep[0].note = g_lastHwNote;
+    lane.substep[0].velocity = g_lastHwVelocity;
 
     refreshLaunchpadGridLedState();
   }
@@ -592,6 +596,7 @@ void handleLaunchpadControl(byte note)
       // begins on a fresh boundary. Playback then keeps looping
       // forever until explicitly paused again.
       g_stepTimer = 0;
+      g_substepIndex = 0;
       g_clockPulseTimer = 0;
 
       midiOutSendStart();
@@ -740,6 +745,7 @@ void onLaunchpadControlChange(
       {
         g_running = true;
         g_stepTimer = 0;
+        g_substepIndex = 0;
         g_clockPulseTimer = 0;
 
         midiOutSendStart();
