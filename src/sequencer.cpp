@@ -7,13 +7,20 @@
 // Timing
 // -----------------------------------------------------------------------------
 
+// Duration of one substep slot. The step itself stays same.
+// the substep divisions only subdivide that
+// step into equal slots for one-shot notes (k > 0).
 uint16_t calculateStepDurationMs()
 {
-  return static_cast<uint16_t>(
-      60000.0f /
-      static_cast<float>(g_tempoBpm) /
-      4.0f /
-      static_cast<float>(g_microstepDivisions));
+  const uint16_t stepMs =
+      static_cast<uint16_t>(
+          60000.0f /
+          static_cast<float>(g_tempoBpm) /
+          4.0f);
+
+  return (g_microstepDivisions > 1)
+      ? (stepMs / g_microstepDivisions)
+      : stepMs;
 }
 
 uint16_t calculateClockPulseMs()
@@ -79,7 +86,14 @@ void clearCurrentStep(uint8_t step)
        channel < kMidiChannelCount;
        ++channel)
   {
-    g_sequence[step][channel].active = false;
+    StepLaneState &lane = g_sequence[step][channel];
+
+    for (uint8_t k = 0; k < kMicrostepMax; ++k)
+    {
+      lane.substep[k].active = false;
+    }
+
+    lane.muted = false;
   }
 }
 
@@ -94,8 +108,14 @@ void deleteChannel(uint8_t channel)
        step < kMaxSequenceLength;
        ++step)
   {
-    g_sequence[step][channel].active = false;
-    g_sequence[step][channel].muted = false;
+    StepLaneState &lane = g_sequence[step][channel];
+
+    for (uint8_t k = 0; k < kMicrostepMax; ++k)
+    {
+      lane.substep[k].active = false;
+    }
+
+    lane.muted = false;
   }
 
   // A deleted channel is no longer muted.
@@ -127,10 +147,10 @@ void recordCurrentStep(
   StepLaneState &lane =
       g_sequence[g_stepIndex][channel];
 
-  lane.active = true;
+  lane.substep[0].active = true;
+  lane.substep[0].note = note;
+  lane.substep[0].velocity = velocity;
   lane.muted = false;
-  lane.note = note;
-  lane.velocity = velocity;
 
   refreshLaunchpadGridLedState();
 }
@@ -290,11 +310,13 @@ void suppressLastStepNotes(uint8_t step)
       continue;
     }
 
-    if (lane.active && !lane.muted)
+    // Substep slots (k > 0) are played as immediate note-on/note-off
+    // pairs, so only the main note (slot 0) needs to be suppressed.
+    if (lane.substep[0].active && !lane.muted)
     {
       sendMidiMessage(
           channel,
-          lane.note,
+          lane.substep[0].note,
           0,
           false);
     }

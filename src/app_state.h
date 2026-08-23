@@ -153,6 +153,9 @@ extern uint8_t g_stepOffset;
 extern uint8_t g_channelOffset;
 
 extern uint8_t g_stepIndex;
+// Substep (slot) counter within the current step (0..g_microstepDivisions-1).
+// Advances every sequencer tick; the step advances when it wraps.
+extern uint8_t g_substepIndex;
 extern uint8_t g_lastPlayedStep;
 extern bool g_hasPlayedStep;
 

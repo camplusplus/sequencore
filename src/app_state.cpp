@@ -101,6 +101,7 @@ uint8_t g_stepOffset = 0;
 uint8_t g_channelOffset = 0;
 
 uint8_t g_stepIndex = 0;
+uint8_t g_substepIndex = 0;
 uint8_t g_lastPlayedStep = 0;
 bool g_hasPlayedStep = false;
 
