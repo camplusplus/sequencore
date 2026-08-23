@@ -70,7 +70,6 @@ constexpr uint8_t kLaunchpadRightColumnControlNoteMax = 89;
 constexpr uint16_t kMinTempoBpm = 60;
 constexpr uint16_t kMaxTempoBpm = 200;
 
-constexpr uint8_t kRatchetMax = 4;
 constexpr uint8_t kMicrostepMax = 8;
 constexpr uint8_t kSwingMax = 50;
 constexpr uint8_t kShuffleMax = 50;
@@ -160,7 +159,6 @@ extern uint8_t g_lastPlayedStep;
 extern bool g_hasPlayedStep;
 
 extern uint16_t g_tempoBpm;
-extern uint8_t g_ratchetCount;
 extern uint8_t g_swingPct;
 
 // Channel corresponding to the most recently pressed right-column

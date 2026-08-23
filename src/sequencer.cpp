@@ -264,31 +264,17 @@ void sendActiveStepNotes(uint8_t step)
       delayMicroseconds(oddStepDelayUs);
     }
 
-    for (uint8_t ratchet = 0;
-         ratchet < g_ratchetCount;
-         ++ratchet)
-    {
-      sendMidiMessage(
-          channel,
-          lane.substep[0].note,
-          lane.substep[0].velocity,
-          true);
+    sendMidiMessage(
+        channel,
+        lane.substep[0].note,
+        lane.substep[0].velocity,
+        true);
 
-      sendMidiMessage(
-          channel,
-          lane.substep[0].note,
-          0,
-          false);
-
-      if (ratchet + 1 < g_ratchetCount)
-      {
-        delayMicroseconds(
-            static_cast<uint32_t>(
-                calculateStepDurationMs()) *
-            1000U /
-            g_ratchetCount);
-      }
-    }
+    sendMidiMessage(
+        channel,
+        lane.substep[0].note,
+        0,
+        false);
   }
 }
 
@@ -411,9 +397,6 @@ void debugPrintState()
 
   Serial.print(" swing=");
   Serial.print(g_swingPct);
-
-  Serial.print(" ratchet=");
-  Serial.print(g_ratchetCount);
 
   Serial.print(" step=");
   Serial.println(g_stepIndex);
