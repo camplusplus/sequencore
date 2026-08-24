@@ -564,13 +564,26 @@ void stageLaunchpadPad(
   }
 
   // While holding the record button, touching a grid pad records
-  // the last hardware MIDI keyboard note onto that step.
+  // the last hardware MIDI keyboard note onto that step. If the
+  // step is already on this pad, delete it instead (toggle).
   if (g_recordingHeldNote)
   {
-    lane.substep[0].active = true;
-    lane.muted = false;
-    lane.substep[0].note = g_lastHwNote;
-    lane.substep[0].velocity = g_lastHwVelocity;
+    if (lane.isSubstepActive())
+    {
+      for (uint8_t k = 0; k < kMicrostepMax; ++k)
+      {
+        lane.substep[k].active = false;
+      }
+
+      lane.muted = false;
+    }
+    else
+    {
+      lane.substep[0].active = true;
+      lane.muted = false;
+      lane.substep[0].note = g_lastHwNote;
+      lane.substep[0].velocity = g_lastHwVelocity;
+    }
 
     refreshLaunchpadGridLedState();
   }
