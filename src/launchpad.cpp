@@ -478,11 +478,18 @@ void stageLaunchpadPad(
       // Record the last hardware MIDI keyboard note into this substep
       // slot. Once any slot beyond 0 is active, the step is played on
       // the divided 8-slot substep grid instead of as a single note.
-      editLane.substep[col].active = true;
-      editLane.substep[col].note = g_lastHwNote;
-      editLane.substep[col].velocity = g_lastHwVelocity;
-      editLane.muted = false;
-
+      // Delete substep if there is already note on it.
+      if(editLane.substep[col].active == true) {
+        editLane.substep[col].active = false;
+        editLane.substep[col].note = 0;
+        editLane.substep[col].velocity = 0;
+        editLane.muted = false;
+      } else {
+        editLane.substep[col].active = true;
+        editLane.substep[col].note = g_lastHwNote;
+        editLane.substep[col].velocity = g_lastHwVelocity;
+        editLane.muted = false;
+      }
       refreshLaunchpadGridLedState();
     }
 
