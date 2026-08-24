@@ -196,6 +196,29 @@ void refreshLaunchpadGridLedState()
     const uint8_t laneChannel =
         (row + g_channelOffset) % kMidiChannelCount;
 
+    // Microstep edit mode: the edited row temporarily shows the 8
+    // substep slots of g_microstepEditStep for that lane (col k -> slot k).
+    // Slot 0 is the main note (white); higher slots are extra substeps
+    // (yellow); empty slots stay off.
+    if (g_microstepEditing &&
+        row == g_microstepEditChannel)
+    {
+      byte color;
+      if (g_sequence[g_microstepEditStep][laneChannel].substep[col].active)
+      {
+        color = (col == 0)
+                    ? kLaunchpadColorWhiteHigh
+                    : kLaunchpadColorYellowHigh;
+      }
+      else
+      {
+        color = kLaunchpadColorOff;
+      }
+
+      setLaunchpadLedColor(note, color);
+      continue;
+    }
+
     byte color;
 
     // Priority: step mute (whole column) > cell mute > active > off.
@@ -419,6 +442,21 @@ void stageLaunchpadPad(
   StepLaneState &lane =
       g_sequence[step][laneChannel];
 
+  // Microstep edit mode: pressing a grid pad on any row other than the
+  // one being edited exits the mode. The edited row's pads do nothing.
+  if (g_microstepEditing)
+  {
+    if (active && row != g_microstepEditChannel)
+    {
+      g_microstepEditing = false;
+      g_microstepHoldActive = false;
+      g_microstepHoldTriggered = false;
+      refreshLaunchpadGridLedState();
+    }
+
+    return;
+  }
+
   // Modifier mode 1 (green, pad 97):
   //   short touch = mute/unmute just this cell (channel at that step)
   //   long hold   = mute/unmute the whole step/column (handled in loop)
@@ -461,6 +499,14 @@ void stageLaunchpadPad(
   // Only a pad touch (NoteOn) acts on the grid. Release does nothing.
   if (!active)
   {
+    // A pad release cancels any pending microstep hold on that pad.
+    if (g_microstepHoldActive &&
+        g_microstepHoldStep == step &&
+        g_microstepHoldChannel == laneChannel)
+    {
+      g_microstepHoldActive = false;
+    }
+
     return;
   }
 
@@ -496,10 +542,53 @@ void stageLaunchpadPad(
 
     refreshLaunchpadGridLedState();
   }
+
+  // Microstep edit mode: hold a grid pad (no modifier, not recording) to
+  // open editing for that step/lane. The hold is resolved in
+  // handleMicrostepEditHold() on the next loop.
+  if (g_modifierMode == 0 && !g_recordingHeldNote)
+  {
+    g_microstepHoldStartMs = millis();
+    g_microstepHoldActive = true;
+    g_microstepHoldTriggered = false;
+    g_microstepHoldStep = step;
+    g_microstepHoldChannel = laneChannel;
+  }
 }
 
 // -----------------------------------------------------------------------------
-// Launchpad tempo
+// Microstep edit (long-press a grid pad)
+// -----------------------------------------------------------------------------
+
+void handleMicrostepEditHold()
+{
+  if (!g_microstepHoldActive)
+  {
+    return;
+  }
+
+  if (g_microstepHoldTriggered)
+  {
+    return;
+  }
+
+  if ((millis() - g_microstepHoldStartMs) < kMicrostepHoldMs)
+  {
+    return;
+  }
+
+  g_microstepHoldTriggered = true;
+  g_microstepHoldActive = false;
+
+  g_microstepEditing = true;
+  g_microstepEditStep = g_microstepHoldStep;
+  g_microstepEditChannel = g_microstepHoldChannel;
+
+  refreshLaunchpadGridLedState();
+}
+
+// -----------------------------------------------------------------------------
+// Launchpad pad handling
 // -----------------------------------------------------------------------------
 
 void adjustLaunchpadTempo(int16_t delta)

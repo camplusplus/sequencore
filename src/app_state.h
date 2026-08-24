@@ -266,6 +266,14 @@ extern uint8_t g_microstepEditChannel;
 // editing for that step/lane.
 constexpr uint16_t kMicrostepHoldMs = 400;
 
+// Tracks the long-press on a single grid pad (no modifier) that opens
+// microstep editing (see handleMicrostepEditHold).
+extern uint32_t g_microstepHoldStartMs;
+extern bool g_microstepHoldActive;
+extern bool g_microstepHoldTriggered;
+extern uint8_t g_microstepHoldStep;
+extern uint8_t g_microstepHoldChannel;
+
 // -----------------------------------------------------------------------------
 // Substep scheduling (queue of slots to fire within a step)
 // -----------------------------------------------------------------------------

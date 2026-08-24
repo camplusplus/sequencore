@@ -176,6 +176,12 @@ bool g_microstepEditing = false;
 uint8_t g_microstepEditStep = 0;
 uint8_t g_microstepEditChannel = 0;
 
+uint32_t g_microstepHoldStartMs = 0;
+bool g_microstepHoldActive = false;
+bool g_microstepHoldTriggered = false;
+uint8_t g_microstepHoldStep = 0;
+uint8_t g_microstepHoldChannel = 0;
+
 // -----------------------------------------------------------------------------
 // Playback: last note-on time per hardware keyboard note (for velocity)
 // -----------------------------------------------------------------------------
