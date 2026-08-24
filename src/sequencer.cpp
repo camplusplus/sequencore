@@ -3,6 +3,39 @@
 #include "app_state.h"
 #include "launchpad.h"
 
+namespace
+{
+  // True if the lane has any substep programmed beyond slot 0 (the main
+  // note). Such lanes are played on the divided 8-slot substep grid
+  // (see handleSubstepPlayback) instead of as a single immediate note
+  // at the step boundary.
+  bool laneHasExtraSubsteps(const StepLaneState &lane)
+  {
+    for (uint8_t k = 1; k < kMicrostepMax; ++k)
+    {
+      if (lane.substep[k].active)
+      {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Release a channel's currently-held substep note, if any.
+  void releaseHeldSubstepNote(uint8_t channel)
+  {
+    if (g_lastPlayedSubstepActive[channel])
+    {
+      sendMidiMessage(
+          channel,
+          g_lastPlayedSubstepNote[channel],
+          0,
+          false);
+      g_lastPlayedSubstepActive[channel] = false;
+    }
+  }
+}
+
 // -----------------------------------------------------------------------------
 // Timing
 // -----------------------------------------------------------------------------
@@ -115,6 +148,10 @@ void deleteChannel(uint8_t channel)
 
   // A deleted channel is no longer muted.
   g_channelMuteMask &= ~(1U << channel);
+
+  // Don't leave a substep note stuck on if this channel was mid-way
+  // through playing one when it got deleted.
+  releaseHeldSubstepNote(channel);
 
   refreshLaunchpadGridLedState();
 }
@@ -241,6 +278,24 @@ void sendActiveStepNotes(uint8_t step)
       continue;
     }
 
+    if (laneHasExtraSubsteps(lane))
+    {
+      // This lane uses more than just the main note: the step is
+      // divided into kMicrostepMax equal slots (a 16th note split
+      // into 8ths). Fire slot 0 now and hold it; later slots are
+      // fired by handleSubstepPlayback() as their scheduled time
+      // within the step arrives.
+      byte note, velocity;
+      if (lane.getSubstep(0, &note, &velocity))
+      {
+        sendMidiMessage(channel, note, velocity, true);
+        g_lastPlayedSubstepNote[channel] = note;
+        g_lastPlayedSubstepVelocity[channel] = velocity;
+        g_lastPlayedSubstepActive[channel] = true;
+      }
+      continue;
+    }
+
     // Swing and per-channel shuffle both delay odd steps.
     // Shuffle is set per channel (green mode pads 91/92).
     const uint16_t swingDelayUs =
@@ -293,6 +348,14 @@ void suppressLastStepNotes(uint8_t step)
       continue;
     }
 
+    // Substep-grid lanes are released via suppressPendingSubstepNotes()
+    // in advanceSequencerStep() instead, since the note actually held
+    // may not be slot 0's note.
+    if (laneHasExtraSubsteps(lane))
+    {
+      continue;
+    }
+
     // Substep slots (k > 0) are played as immediate note-on/note-off
     // pairs, so only the main note (slot 0) needs to be suppressed.
     if (lane.substep[0].active && !lane.muted)
@@ -303,6 +366,17 @@ void suppressLastStepNotes(uint8_t step)
           0,
           false);
     }
+  }
+}
+
+// Releases any substep note still held over from the previous step,
+// for every channel. Called right before a new step starts so nothing
+// is left stuck on if a lane's last active slot wasn't slot 7.
+static void suppressPendingSubstepNotes()
+{
+  for (uint8_t channel = 0; channel < kMidiChannelCount; ++channel)
+  {
+    releaseHeldSubstepNote(channel);
   }
 }
 
@@ -320,6 +394,76 @@ void advanceSequencerStep()
       (g_stepIndex + 1) % g_sequenceLength;
 
   g_hasPlayedStep = true;
+
+  // Reset the substep scheduler for the step that just started
+  // (g_lastPlayedStep, since g_stepIndex has now moved to the next one).
+  g_substepIndex = 0;
+  g_substepStepStartMs = millis();
+}
+
+// Called every loop(). Advances g_substepIndex as time passes within the
+// current step and fires slot 1..7 for any lane that uses the substep
+// grid (laneHasExtraSubsteps). Lanes with only slot 0 are untouched here
+// since they were already fired-and-released in sendActiveStepNotes().
+void handleSubstepPlayback()
+{
+  if (!g_running || !g_hasPlayedStep)
+  {
+    return;
+  }
+
+  const uint16_t stepMs = calculateStepDurationMs();
+  const uint16_t slotMs = stepMs / kMicrostepDivisionsDefault;
+
+  if (slotMs == 0)
+  {
+    return;
+  }
+
+  const uint32_t elapsedMs = millis() - g_substepStepStartMs;
+  uint8_t targetIndex = static_cast<uint8_t>(elapsedMs / slotMs);
+
+  if (targetIndex >= kMicrostepDivisionsDefault)
+  {
+    targetIndex = kMicrostepDivisionsDefault - 1;
+  }
+
+  while (g_substepIndex < targetIndex)
+  {
+    ++g_substepIndex;
+
+    if (g_stepMuted[g_lastPlayedStep])
+    {
+      continue;
+    }
+
+    for (uint8_t channel = 0; channel < kMidiChannelCount; ++channel)
+    {
+      if (g_channelMuteMask & (1U << channel))
+      {
+        continue;
+      }
+
+      StepLaneState &lane = g_sequence[g_lastPlayedStep][channel];
+
+      if (lane.muted || !laneHasExtraSubsteps(lane))
+      {
+        continue;
+      }
+
+      // Release whatever this channel was holding from the previous slot.
+      releaseHeldSubstepNote(channel);
+
+      byte note, velocity;
+      if (lane.getSubstep(g_substepIndex, &note, &velocity))
+      {
+        sendMidiMessage(channel, note, velocity, true);
+        g_lastPlayedSubstepNote[channel] = note;
+        g_lastPlayedSubstepVelocity[channel] = velocity;
+        g_lastPlayedSubstepActive[channel] = true;
+      }
+    }
+  }
 }
 
 // -----------------------------------------------------------------------------

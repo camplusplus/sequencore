@@ -22,9 +22,9 @@ Progress:
 - Shuffle: in Modifier green mode, pad up increases and pad down decreases the shuffle of the last pressed channel.
 - Sequence length: in Modifier green mode, pad left decreases and pad right increases the sequence length (4..64 steps, default 16).
 - Teensy 4.1 hardware UART TX pins: Serial1 TX = pin 1, Serial2 TX = pin 8, Serial3 TX = pin 14, Serial4 TX = pin 17, Serial5 TX = pin 20, Serial6 TX = pin 24. Use any or all.
+- Microsteps: Editing step when longer pressed on step without modifier button. Add or delete note same as steps: (record + press note to add it; red mode to delete it). Exit by any of other row note.
 
 ToDo:
-- Microsteps: Editing step when longer pressed on step without modifier button. Add or delete note same as steps: (record + press note to add it; red mode to delete it). To exit substep editing mode press any of others row notes.
 - Song mode
 - Save to mircosd card
 

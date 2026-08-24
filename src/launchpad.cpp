@@ -443,14 +443,46 @@ void stageLaunchpadPad(
       g_sequence[step][laneChannel];
 
   // Microstep edit mode: pressing a grid pad on any row other than the
-  // one being edited exits the mode. The edited row's pads do nothing.
+  // one being edited exits the mode. The edited row's pads add/delete
+  // notes in the corresponding substep slot (col k -> slot k), the same
+  // way normal step editing works: record + press to add, red mode to
+  // delete.
   if (g_microstepEditing)
   {
-    if (active && row != g_microstepEditChannel)
+    if (!active)
+      {
+        return;
+      }
+    if (row != g_microstepEditChannel)
     {
       g_microstepEditing = false;
       g_microstepHoldActive = false;
       g_microstepHoldTriggered = false;
+      refreshLaunchpadGridLedState();
+      return;
+    }
+
+    StepLaneState &editLane =
+      g_sequence[g_microstepEditStep][g_microstepEditChannel];
+
+    if (g_modifierMode == 2)
+    {
+      // Red modifier mode: delete the note in this substep slot.
+      editLane.substep[col].active = false;
+      refreshLaunchpadGridLedState();
+      return;
+    }
+
+    if (g_recordingHeldNote)
+    {
+      // Record the last hardware MIDI keyboard note into this substep
+      // slot. Once any slot beyond 0 is active, the step is played on
+      // the divided 8-slot substep grid instead of as a single note.
+      editLane.substep[col].active = true;
+      editLane.substep[col].note = g_lastHwNote;
+      editLane.substep[col].velocity = g_lastHwVelocity;
+      editLane.muted = false;
+
       refreshLaunchpadGridLedState();
     }
 
