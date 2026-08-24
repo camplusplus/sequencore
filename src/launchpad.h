@@ -38,6 +38,13 @@ void stageLaunchpadPad(
 void handleLaunchpadControl(byte note);
 
 // -----------------------------------------------------------------------------
+// Microstep edit (long-press a grid pad)
+// -----------------------------------------------------------------------------
+
+// Called every loop: tracks a long-press on a grid pad and opens
+// microstep editing for the held pad's step/lane after kMicrostepHoldMs.
+void handleMicrostepEditHold();
+// -----------------------------------------------------------------------------
 // USB MIDI callbacks
 // -----------------------------------------------------------------------------
 

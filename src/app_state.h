@@ -246,3 +246,40 @@ extern bool g_substepHoldActive;
 extern bool g_substepHoldTriggered;
 extern uint8_t g_substepHoldStep;
 extern uint8_t g_substepHoldChannel;
+
+// -----------------------------------------------------------------------------
+// Microstep edit mode (long-press a grid pad)
+// -----------------------------------------------------------------------------
+
+// When true, one grid row shows the 8 substep slots of a single step/lane.
+// Col k of the edit row maps to substep slot k (0..7). Slot 0 is the main
+// note; higher slots are extra substeps that can be added/deleted.
+extern bool g_microstepEditing;
+
+// The step whose substeps are being edited.
+extern uint8_t g_microstepEditStep;
+
+// The channel (grid row) whose substeps are shown/edited.
+extern uint8_t g_microstepEditChannel;
+
+// Hold this long (ms) on a grid pad (no modifier) to open microstep
+// editing for that step/lane.
+constexpr uint16_t kMicrostepHoldMs = 400;
+
+// -----------------------------------------------------------------------------
+// Substep scheduling (queue of slots to fire within a step)
+// -----------------------------------------------------------------------------
+
+// Slots queued to play for the current step (fired in substep order).
+extern SubstepNote g_substepQueue[kMicrostepMax];
+extern uint8_t g_substepQueueCount;
+extern uint8_t g_substepQueueNextIndex;
+
+// millis() when the current step started (for substep timing).
+extern uint32_t g_substepStepStartMs;
+
+// Last note held per channel, used to send note-off at the next step
+// boundary (so substep notes are released cleanly instead of overlapping).
+extern byte g_lastPlayedSubstepNote[kMidiChannelCount];
+extern bool g_lastPlayedSubstepActive[kMidiChannelCount];
+extern byte g_lastPlayedSubstepVelocity[kMidiChannelCount];

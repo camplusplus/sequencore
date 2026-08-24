@@ -171,3 +171,28 @@ bool g_substepHoldActive = false;
 bool g_substepHoldTriggered = false;
 uint8_t g_substepHoldStep = 0;
 uint8_t g_substepHoldChannel = 0;
+
+bool g_microstepEditing = false;
+uint8_t g_microstepEditStep = 0;
+uint8_t g_microstepEditChannel = 0;
+
+// -----------------------------------------------------------------------------
+// Playback: last note-on time per hardware keyboard note (for velocity)
+// -----------------------------------------------------------------------------
+
+uint32_t g_lastHwNoteOnTime = 0;
+
+// -----------------------------------------------------------------------------
+// Playback: substep scheduling (queue of slots to fire within a step)
+// -----------------------------------------------------------------------------
+
+SubstepNote g_substepQueue[kMicrostepMax];
+uint8_t g_substepQueueCount = 0;
+uint8_t g_substepQueueNextIndex = 0;
+uint32_t g_substepStepStartMs = 0;
+
+// Last note held per channel, used to send note-off at the next step
+// boundary (so substep notes are released cleanly instead of overlapping).
+byte g_lastPlayedSubstepNote[kMidiChannelCount] = {0};
+bool g_lastPlayedSubstepActive[kMidiChannelCount] = {false};
+byte g_lastPlayedSubstepVelocity[kMidiChannelCount] = {0};
