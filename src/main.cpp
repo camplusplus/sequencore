@@ -2,6 +2,7 @@
 
 #include "app_state.h"
 #include "launchpad.h"
+#include "sd_store.h"
 #include "sequencer.h"
 
 void setup()
@@ -26,6 +27,12 @@ void setup()
   launchpad.setHandleNoteOn(onLaunchpadNoteOn);
   launchpad.setHandleNoteOff(onLaunchpadNoteOff);
   launchpad.setHandleControlChange(onLaunchpadControlChange);
+
+  // ---------------------------------------------------------------------------
+  // SD card (built-in Teensy 4.1 SDIO slot)
+  // ---------------------------------------------------------------------------
+
+  sdStoreInit();
 
   // ---------------------------------------------------------------------------
   // USB host

@@ -1,6 +1,7 @@
 #include "launchpad.h"
 
 #include "app_state.h"
+#include "sd_store.h"
 #include "sequencer.h"
 
 #include <string.h>
@@ -351,14 +352,19 @@ void refreshLaunchpadControlLedState()
           ? kLaunchpadColorAmberLow
           : kLaunchpadColorWhiteLow);
 
-  // Modifier (Pad 97): 0 = off, 1 = green (mute), 2 = red (delete).
+  // Modifier (Pad 97): 0 = off, 1 = green (mute), 2 = red (delete),
+  // 3 = amber (save), 4 = blue (load).
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 6,
       g_modifierMode == 1
           ? kLaunchpadColorGreenHigh
           : (g_modifierMode == 2
                  ? kLaunchpadColorRedHigh
-                 : kLaunchpadColorOff));
+                 : (g_modifierMode == 3
+                        ? kLaunchpadColorAmberHigh
+                        : (g_modifierMode == 4
+                               ? kLaunchpadColorBlueLow
+                               : kLaunchpadColorOff))));
 
   // Run/stop.
   setLaunchpadLedColor(
@@ -826,7 +832,7 @@ void onLaunchpadControlChange(
     }
 
     // ---------------------------------------------------------------------------
-    // MODIFIER MODE: mute / delete
+    // MODIFIER MODE: mute / delete / save / load
     // ---------------------------------------------------------------------------
 
     if (g_modifierMode > 0)
@@ -835,6 +841,8 @@ void onLaunchpadControlChange(
       // (Right-column pads send a CC on press and another on release.)
       if (value != 0)
       {
+        bool sdOk = false;
+
         if (internalChannel < kMidiChannelCount)
         {
           if (g_modifierMode == 1)
@@ -847,6 +855,23 @@ void onLaunchpadControlChange(
             // Delete the entire channel lane.
             deleteChannel(internalChannel);
           }
+          else if (g_modifierMode == 3)
+          {
+            // Save the entire channel lane to the SD card.
+            sdOk = sdStoreSaveChannel(internalChannel);
+          }
+          else if (g_modifierMode == 4)
+          {
+            // Load the entire channel lane from the SD card.
+            sdOk = sdStoreLoadChannel(internalChannel);
+          }
+        }
+
+        // Flash the built-in LED when an SD save/load succeeded.
+        if (sdOk)
+        {
+          g_ledFlashTimer = 0;
+          digitalWriteFast(LED_BUILTIN, HIGH);
         }
 
         refreshLaunchpadControlLedState();
@@ -903,14 +928,15 @@ void onLaunchpadControlChange(
 
   if (isLaunchpadTopRowControlNote(control))
   {
-    // Pad 97 (note 91+6) is the modifier: a 3-state toggle that cycles
-    // on each press. 0 = none (off), 1 = green (mute), 2 = red (delete).
-    // While set, the right column pads act on the current channel.
+    // Pad 97 (note 91+6) is the modifier: a 5-state toggle that cycles
+    // on each press. 0 = none (off), 1 = green (mute), 2 = red (delete),
+    // 3 = amber (save), 4 = blue (load). While set, the right column pads
+    // act on the current channel.
     if (control == kLaunchpadTopRowControlNoteMin + 6)
     {
       if (value != 0)
       {
-        g_modifierMode = (g_modifierMode + 1) % 3;
+        g_modifierMode = (g_modifierMode + 1) % 5;
       }
 
       refreshLaunchpadControlLedState();

@@ -203,13 +203,15 @@ extern bool g_launchpadControlLedsInitialized;
 extern byte g_lastPressedControlNote;
 extern byte g_controlFlashNote;
 
-// Pad 97 modifier mode (3-state toggle, cycles on press).
+// Pad 97 modifier mode (5-state toggle, cycles on press).
 // 0 = none (LED off)
 // 1 = green (right column pads = mute channel; grid pads = mute cell/step;
-//             top row 91 = shuffle up, 92 = shuffle down,
+//             top row:  91 = shuffle up, 92 = shuffle down,
 //                       93 = sequence length down, 94 = sequence length up,
 //                       95 = microstep division down, 96 = microstep division up)
 // 2 = red (right column pads = delete channel)
+// 3 = amber (right column pads = save channel patterns)
+// 4 = blue (right column pads = load channel patterns)
 extern uint8_t g_modifierMode;
 
 // Bit N set = channel N is muted (green modifier mode).
