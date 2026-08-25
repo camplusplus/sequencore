@@ -25,7 +25,7 @@ Progress:
 - Microsteps: Editing step when longer pressed on step without modifier button. Add or delete note same as steps: (record + press note to add it; red mode to delete it). Exit by any of other row note.
 - Save to microSD card: use two functions modes when pressed "Custom" function pad: 1. Save (amber), 2.Load (blue). Files are named ch1.seq - ch6.seq in folder sequencore. To save or load just press Channel pad on the right in appropriate function mode. 
 - Multiple tracks can be saved and loaded and they will have auto increment in brackets: ch1[1].seq. Loading will load last saved sequence first then loop from begining.
-- Autoload tracks with name autoch1[1].seq on start. Brackets will hold nuber afer which 16 steps sequence loop to load and play (it will loop untill next file is found). For example autoch1[5].seq will load after 4 loops of first file.
+- Autoload tracks named autochN[K].seq on start (N = channel, K = track number). Each existing file plays for 16 steps, then the next K is loaded and played, looping back to [1] after the last file (only existing files are cycled). For example, with autoch1[1].seq through autoch1[5].seq on the card, autoch1[5].seq plays after 4 loops of the first file.
 
 
   <img width="1834" height="616" alt="17868286194283894539707099595966" src="https://github.com/user-attachments/assets/77bb5b08-e9ed-4d48-aa5c-3f16cf06b46b" />

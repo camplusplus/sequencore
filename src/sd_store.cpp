@@ -3,24 +3,26 @@
 #include "app_state.h"
 
 #include <SD.h>
+#include <stdlib.h>
 #include <string.h>
 
 // -----------------------------------------------------------------------------
 // On-disk layout
 //
 //   /sequencore/ch<N>[K].seq          (N = 0..15, K = track number)
-//   /sequencore/autoch<N>[K].seq      (N = 0..15, K = 1..kMaxAutoTracksPerChannel)
+//   /sequencore/autoch<N>[K].seq      (N = 0..15, K = track number)
 //
 // ch files hold manually saved channel patterns (one per track index).
 //
 // autoch files are auto-track patterns. They are never written by the
 // firmware. In setup, before the main loop, the firmware checks the last
-// increment K present on the card for each channel and loads every existing
-// autochN[1..K].seq pattern into RAM. While the sequencer runs, the loaded
-// files are played in succession: each channel cycles through its existing
-// files (ascending K, gaps skipped), each file plays for exactly
-// kAutoTrackSteps (16) steps, then wraps back to the first file (a channel
-// with a single existing file loops it forever).
+// increment K present on the card for each channel and records every
+// existing autochN[1..K].seq (only files that actually exist). The track
+// patterns themselves stay on the card and are read when a track starts.
+// While the sequencer runs, the existing files are played in succession:
+// each channel cycles through them (ascending K, gaps skipped), each file
+// plays for exactly kAutoTrackSteps (16) steps, then wraps back to the
+// first file (a channel with a single existing file loops it forever).
 //
 // Every file is a small header followed by the lane data:
 //
@@ -46,13 +48,12 @@ constexpr const char *kRootDirPath = "/sequencore";
 // Set by sdStoreScanTrackCounters().
 uint8_t g_sdAutoLastK[kMidiChannelCount] = {0};
 
-// Auto track patterns loaded from the SD card into RAM in setup:
-// g_sdAutoPattern[channel][track - 1][step].
-StepLaneState g_sdAutoPattern[kMidiChannelCount][kMaxAutoTracksPerChannel][kAutoTrackSteps];
-
 // Ascending list of existing auto track increments (K) per channel, built
-// in setup. g_sdAutoCount[c] is the length of this list (0 = none).
-uint8_t g_sdAutoKList[kMidiChannelCount][kMaxAutoTracksPerChannel] = {0};
+// in setup. Each list is heap-allocated to hold exactly g_sdAutoCount[c]
+// entries (0 = none, pointer NULL): a channel can have an unlimited number
+// of auto tracks. The track patterns themselves stay on the SD card and
+// are read fresh when a track's bar starts.
+uint8_t *g_sdAutoKList[kMidiChannelCount] = {nullptr};
 
 // Number of existing auto track files loaded per channel (0 = none).
 uint8_t g_sdAutoCount[kMidiChannelCount] = {0};
@@ -145,8 +146,8 @@ static bool parseTrackFilename(
 }
 
 // Returns true if `name` is an auto-track file ("autochN[K].seq"), and on
-// success writes the channel (N) and track increment (K, 1..kMaxAutoTracksPerChannel)
-// to outChannel / outTrack.
+// success writes the channel (N) and track increment (K) to outChannel
+// and outTrack.
 static bool parseAutoTrackFilename(
     const char *name,
     uint8_t *outChannel,
@@ -160,11 +161,6 @@ static bool parseAutoTrackFilename(
   uint8_t channel = 0;
   uint8_t track = 0;
   if (!parseChannelAndIndex(name + 4, &channel, &track))
-  {
-    return false;
-  }
-
-  if (track < 1 || track > kMaxAutoTracksPerChannel)
   {
     return false;
   }
@@ -541,6 +537,9 @@ bool sdStoreLoadChannel(uint8_t channel)
 
 void sdStoreLoadAutoTracks()
 {
+  // Scratch lane buffer while reading a track file off the card.
+  StepLaneState scratch[kAutoTrackSteps];
+
   bool anyChannelHasAutoTracks = false;
 
   for (uint8_t c = 0; c < kMidiChannelCount; ++c)
@@ -549,21 +548,27 @@ void sdStoreLoadAutoTracks()
     // one found on the card. Only the files that exist (and load validly)
     // are recorded; playback cycles through exactly these, so a channel
     // with a single existing file loops that file forever.
-    const uint8_t cap = g_sdAutoLastK[c];
+    const uint8_t lastK = g_sdAutoLastK[c];
+    g_sdAutoKList[c] = nullptr;
     g_sdAutoCount[c] = 0;
     g_sdAutoIndex[c] = 1;
 
-    for (uint8_t k = 1; k <= cap; ++k)
+    for (uint8_t k = 1; k <= lastK; ++k)
     {
       char path[64];
       buildAutoTrackPath(path, c, k);
 
-      // k is 1-based; g_sdAutoPattern is indexed 0-based by (k - 1).
       if (sdIsReady() &&
           SD.exists(path) &&
-          loadAutoTrackFile(path, c, g_sdAutoPattern[c][k - 1]))
+          loadAutoTrackFile(path, c, scratch))
       {
-        g_sdAutoKList[c][g_sdAutoCount[c]++] = k;
+        // Grow the heap list to hold this increment.
+        g_sdAutoKList[c] = static_cast<uint8_t*>(
+            realloc(g_sdAutoKList[c], g_sdAutoCount[c] + 1));
+        if (g_sdAutoKList[c])
+        {
+          g_sdAutoKList[c][g_sdAutoCount[c]++] = k;
+        }
       }
     }
 
@@ -576,10 +581,14 @@ void sdStoreLoadAutoTracks()
 
     // Prime the first existing file so it is live in g_sequence (and
     // visible on the grid) as soon as the sequencer starts running.
-    const uint8_t k0 = g_sdAutoKList[c][0];
-    for (uint8_t s = 0; s < kAutoTrackSteps; ++s)
+    char path[64];
+    buildAutoTrackPath(path, c, g_sdAutoKList[c][0]);
+    if (loadAutoTrackFile(path, c, scratch))
     {
-      g_sequence[s][c] = g_sdAutoPattern[c][k0 - 1][s];
+      for (uint8_t s = 0; s < kAutoTrackSteps; ++s)
+      {
+        g_sequence[s][c] = scratch[s];
+      }
     }
   }
 
@@ -600,6 +609,9 @@ void sdStorePlayAutoTracks()
     return;
   }
 
+  // Scratch lane buffer while reading a track file off the card.
+  StepLaneState scratch[kAutoTrackSteps];
+
   bool anyChannelHasAutoTracks = false;
 
   for (uint8_t c = 0; c < kMidiChannelCount; ++c)
@@ -618,10 +630,17 @@ void sdStorePlayAutoTracks()
         static_cast<uint8_t>(g_sdAutoIndex[c] % g_sdAutoCount[c] + 1);
     g_sdAutoIndex[c] = next;
 
-    const uint8_t k = g_sdAutoKList[c][next - 1];
-    for (uint8_t s = 0; s < kAutoTrackSteps; ++s)
+    // The track pattern lives on the card: read the file fresh and swap
+    // the channel lane in. If the read fails the previous pattern stays
+    // live.
+    char path[64];
+    buildAutoTrackPath(path, c, g_sdAutoKList[c][next - 1]);
+    if (loadAutoTrackFile(path, c, scratch))
     {
-      g_sequence[s][c] = g_sdAutoPattern[c][k - 1][s];
+      for (uint8_t s = 0; s < kAutoTrackSteps; ++s)
+      {
+        g_sequence[s][c] = scratch[s];
+      }
     }
   }
 

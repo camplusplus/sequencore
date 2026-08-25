@@ -22,10 +22,12 @@
 // up to the highest track, then loop back to track 1 again.
 //
 // Auto tracks are stored as /sequencore/autoch<N>[K].seq
-// (N = 0..15, K = 1..kMaxAutoTracksPerChannel) and are loaded into RAM
-// at startup, before the main loop: the firmware checks the last
-// increment K present on the card for each channel and loads every
-// autochN[1..K].seq pattern (only files that actually exist are loaded).
+// (N = 0..15, K = track number). At startup, before the main loop, the
+// firmware checks the last increment K present on the card for each
+// channel and records every existing autochN[1..K].seq (only files that
+// actually exist); a channel can have an unlimited number of auto tracks.
+// The patterns themselves stay on the card and are read when a track
+// starts.
 // While the sequencer is running the loaded files are played in
 // succession: each channel cycles through its existing files (ascending
 // K, gaps skipped) and each file plays for exactly kAutoTrackSteps (16)
@@ -36,9 +38,6 @@
 
 // Number of steps in one auto track pattern.
 constexpr uint8_t kAutoTrackSteps = 16;
-
-// Maximum number of auto track files loaded per channel.
-constexpr uint8_t kMaxAutoTracksPerChannel = 16;
 
 // Initialize the SD card and create the /sequencore folder if needed.
 // Safe to call repeatedly: the Teensy SD library auto-initializes on the
@@ -62,9 +61,9 @@ bool sdStoreSaveChannel(uint8_t channel);
 bool sdStoreLoadChannel(uint8_t channel);
 
 // Called in setup after sdStoreScanTrackCounters(): for each channel,
-// check the last increment K on the card of "autochN[K].seq" and load
-// every existing autochN[1..K].seq pattern into RAM (ascending K; gaps
-// are skipped; capped at kMaxAutoTracksPerChannel per channel).
+// check the last increment K on the card of "autochN[K].seq" and record
+// every existing autochN[1..K].seq (ascending K; gaps are skipped). The
+// patterns stay on the card and are read when a track starts.
 // For every channel that has auto tracks, g_sequence is primed with the
 // first existing file and the sequence length is set to kAutoTrackSteps.
 void sdStoreLoadAutoTracks();
