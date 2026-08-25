@@ -25,11 +25,13 @@
 // (N = 0..15, K = 1..kMaxAutoTracksPerChannel) and are loaded into RAM
 // at startup, before the main loop: the firmware checks the last
 // increment K present on the card for each channel and loads every
-// autochN[1..K].seq pattern. While the sequencer is running the loaded
-// files are played in succession: each channel cycles through
-// K = 1, 2, ..., Kmax and each file plays for exactly kAutoTrackSteps
-// (16) steps, then wraps back to K = 1. While any auto track is loaded
-// the sequence length is held at kAutoTrackSteps.
+// autochN[1..K].seq pattern (only files that actually exist are loaded).
+// While the sequencer is running the loaded files are played in
+// succession: each channel cycles through its existing files (ascending
+// K, gaps skipped) and each file plays for exactly kAutoTrackSteps (16)
+// steps, then wraps back to the first file - a single existing file
+// loops forever. While any auto track is loaded the sequence length is
+// held at kAutoTrackSteps.
 // -----------------------------------------------------------------------------
 
 // Number of steps in one auto track pattern.
@@ -61,18 +63,19 @@ bool sdStoreLoadChannel(uint8_t channel);
 
 // Called in setup after sdStoreScanTrackCounters(): for each channel,
 // check the last increment K on the card of "autochN[K].seq" and load
-// all autochN[1..K].seq patterns into RAM (dense: files are
-// auto-incremented, so the last increment is the first K for which
-// the file is missing; capped at kMaxAutoTracksPerChannel per channel).
-// For every channel that has auto tracks, g_sequence is primed with
-// track 1 and the sequence length is set to kAutoTrackSteps.
+// every existing autochN[1..K].seq pattern into RAM (ascending K; gaps
+// are skipped; capped at kMaxAutoTracksPerChannel per channel).
+// For every channel that has auto tracks, g_sequence is primed with the
+// first existing file and the sequence length is set to kAutoTrackSteps.
 void sdStoreLoadAutoTracks();
 
 // Advances the auto-track playback one step. Call after
 // advanceSequencerStep() while the sequencer is running: when the
 // 16-step bar wraps (g_stepIndex back to 0), each channel's lane is
-// replaced by the next loaded auto track file, wrapping back to K = 1
-// after the last file, so the files play in succession, each for 16 steps.
+// replaced by the next existing auto track file (ascending K, gaps
+// skipped), wrapping back to the first file after the last one, so the
+// files play in succession, each for 16 steps. A channel with a single
+// existing file loops that file forever.
 void sdStorePlayAutoTracks();
 
 // Next track index to save for each channel (1-based).

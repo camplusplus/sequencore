@@ -15,11 +15,12 @@
 //
 // autoch files are auto-track patterns. They are never written by the
 // firmware. In setup, before the main loop, the firmware checks the last
-// increment K present on the card for each channel and loads every
+// increment K present on the card for each channel and loads every existing
 // autochN[1..K].seq pattern into RAM. While the sequencer runs, the loaded
-// files are played in succession: each channel cycles through
-// K = 1, 2, ..., Kmax, each file plays for exactly kAutoTrackSteps (16)
-// steps, then wraps back to K = 1.
+// files are played in succession: each channel cycles through its existing
+// files (ascending K, gaps skipped), each file plays for exactly
+// kAutoTrackSteps (16) steps, then wraps back to the first file (a channel
+// with a single existing file loops it forever).
 //
 // Every file is a small header followed by the lane data:
 //
@@ -49,10 +50,15 @@ uint8_t g_sdAutoLastK[kMidiChannelCount] = {0};
 // g_sdAutoPattern[channel][track - 1][step].
 StepLaneState g_sdAutoPattern[kMidiChannelCount][kMaxAutoTracksPerChannel][kAutoTrackSteps];
 
-// Number of auto track files loaded per channel (0 = none).
+// Ascending list of existing auto track increments (K) per channel, built
+// in setup. g_sdAutoCount[c] is the length of this list (0 = none).
+uint8_t g_sdAutoKList[kMidiChannelCount][kMaxAutoTracksPerChannel] = {0};
+
+// Number of existing auto track files loaded per channel (0 = none).
 uint8_t g_sdAutoCount[kMidiChannelCount] = {0};
 
-// The auto track file (1-based) currently loaded in g_sequence per channel.
+// Position (1-based) into g_sdAutoKList[c] of the auto track file currently
+// loaded in g_sequence for channel c.
 uint8_t g_sdAutoIndex[kMidiChannelCount] = {1};
 
 // Per-channel position (1-based) into the ascending list of existing
@@ -539,12 +545,13 @@ void sdStoreLoadAutoTracks()
 
   for (uint8_t c = 0; c < kMidiChannelCount; ++c)
   {
-    // Files are auto-incremented, so load every increment up to the last
-    // one found on the card. g_sdAutoCount tracks the last increment K, so
-    // the playback cycles through K = 1..K even if a file in the middle is
-    // missing (a missing file's lane is left cleared).
+    // Files are auto-incremented, so probe every increment up to the last
+    // one found on the card. Only the files that exist (and load validly)
+    // are recorded; playback cycles through exactly these, so a channel
+    // with a single existing file loops that file forever.
     const uint8_t cap = g_sdAutoLastK[c];
-    g_sdAutoCount[c] = cap;
+    g_sdAutoCount[c] = 0;
+    g_sdAutoIndex[c] = 1;
 
     for (uint8_t k = 1; k <= cap; ++k)
     {
@@ -556,30 +563,23 @@ void sdStoreLoadAutoTracks()
           SD.exists(path) &&
           loadAutoTrackFile(path, c, g_sdAutoPattern[c][k - 1]))
       {
-        // Loaded.
-      }
-      else
-      {
-        // Missing/corrupt file: leave this lane cleared.
-        for (uint8_t s = 0; s < kAutoTrackSteps; ++s)
-        {
-          g_sdAutoPattern[c][k - 1][s] = StepLaneState{};
-        }
+        g_sdAutoKList[c][g_sdAutoCount[c]++] = k;
       }
     }
 
-    if (cap == 0)
+    if (g_sdAutoCount[c] == 0)
     {
       continue;
     }
 
     anyChannelHasAutoTracks = true;
 
-    // Prime track 1 so it is live in g_sequence (and visible on the grid)
-    // as soon as the sequencer starts running.
+    // Prime the first existing file so it is live in g_sequence (and
+    // visible on the grid) as soon as the sequencer starts running.
+    const uint8_t k0 = g_sdAutoKList[c][0];
     for (uint8_t s = 0; s < kAutoTrackSteps; ++s)
     {
-      g_sequence[s][c] = g_sdAutoPattern[c][0][s];
+      g_sequence[s][c] = g_sdAutoPattern[c][k0 - 1][s];
     }
   }
 
@@ -611,15 +611,17 @@ void sdStorePlayAutoTracks()
 
     anyChannelHasAutoTracks = true;
 
-    // Advance to the next file; wrap back to K = 1 after the last one.
-    const uint8_t next = (g_sdAutoIndex[c] >= g_sdAutoCount[c])
-                             ? 1
-                             : static_cast<uint8_t>(g_sdAutoIndex[c] + 1);
+    // Advance to the next existing file, wrapping back to the first after
+    // the last. With a single existing file the same file is reloaded, so
+    // it loops until more files appear on the card.
+    const uint8_t next =
+        static_cast<uint8_t>(g_sdAutoIndex[c] % g_sdAutoCount[c] + 1);
     g_sdAutoIndex[c] = next;
 
+    const uint8_t k = g_sdAutoKList[c][next - 1];
     for (uint8_t s = 0; s < kAutoTrackSteps; ++s)
     {
-      g_sequence[s][c] = g_sdAutoPattern[c][next - 1][s];
+      g_sequence[s][c] = g_sdAutoPattern[c][k - 1][s];
     }
   }
 

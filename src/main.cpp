@@ -138,7 +138,8 @@ void loop()
 
     // Auto tracks (autochN[K].seq): the files loaded in setup are played in
     // succession; when a 16-step bar wraps, each channel's lane is replaced
-    // by the next loaded file (K = 1, 2, ..., Kmax, then back to 1).
+    // by the next existing file (ascending K, gaps skipped, then back to
+    // the first file - a single existing file loops forever).
     sdStorePlayAutoTracks();
 
     refreshLaunchpadGridLedState();
