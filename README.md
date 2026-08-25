@@ -24,7 +24,7 @@ Progress:
 - Teensy 4.1 hardware UART TX pins: Serial1 TX = pin 1, Serial2 TX = pin 8, Serial3 TX = pin 14, Serial4 TX = pin 17, Serial5 TX = pin 20, Serial6 TX = pin 24. Use any or all.
 - Microsteps: Editing step when longer pressed on step without modifier button. Add or delete note same as steps: (record + press note to add it; red mode to delete it). Exit by any of other row note.
 - Save to microSD card: use two functions modes when pressed "Custom" function pad: 1. Save (amber), 2.Load (blue). Files are named ch1.seq - ch6.seq in folder sequencore. To save or load just press Channel pad on the right in appropriate function mode. 
-- Multiple tracks can be saved and loaded and they will have auto increment in brackets: ch1[1].seq. 
+- Multiple tracks can be saved and loaded and they will have auto increment in brackets: ch1[1].seq. Loading will load last saved sequence first then loop from begining.
 
 ToDo:
 
