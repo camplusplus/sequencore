@@ -84,7 +84,7 @@ constexpr uint8_t kLaunchpadColorAmberHigh = 9;
 constexpr uint8_t kLaunchpadColorRedLow = 4;
 constexpr uint8_t kLaunchpadColorRedHigh = 6;
 
-constexpr uint8_t kLaunchpadColorBlueLow = 10;
+constexpr uint8_t kLaunchpadColorBlueLow = 42;
 
 constexpr uint8_t kLaunchpadColorYellowLow = 12;
 constexpr uint8_t kLaunchpadColorYellowHigh = 14;
