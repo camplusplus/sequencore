@@ -20,7 +20,23 @@
 // Loading a channel cycles through its saved tracks: the first load
 // loads the highest saved track, subsequent loads load track 1, 2, ...
 // up to the highest track, then loop back to track 1 again.
+//
+// Auto tracks are stored as /sequencore/autoch<N>[K].seq
+// (N = 0..15, K = 1..kMaxAutoTracksPerChannel) and are loaded into RAM
+// at startup, before the main loop: the firmware checks the last
+// increment K present on the card for each channel and loads every
+// autochN[1..K].seq pattern. While the sequencer is running the loaded
+// files are played in succession: each channel cycles through
+// K = 1, 2, ..., Kmax and each file plays for exactly kAutoTrackSteps
+// (16) steps, then wraps back to K = 1. While any auto track is loaded
+// the sequence length is held at kAutoTrackSteps.
 // -----------------------------------------------------------------------------
+
+// Number of steps in one auto track pattern.
+constexpr uint8_t kAutoTrackSteps = 16;
+
+// Maximum number of auto track files loaded per channel.
+constexpr uint8_t kMaxAutoTracksPerChannel = 16;
 
 // Initialize the SD card and create the /sequencore folder if needed.
 // Safe to call repeatedly: the Teensy SD library auto-initializes on the
@@ -42,6 +58,22 @@ bool sdStoreSaveChannel(uint8_t channel);
 // into the running sequence.
 // Returns true on success (file exists, valid header, full read).
 bool sdStoreLoadChannel(uint8_t channel);
+
+// Called in setup after sdStoreScanTrackCounters(): for each channel,
+// check the last increment K on the card of "autochN[K].seq" and load
+// all autochN[1..K].seq patterns into RAM (dense: files are
+// auto-incremented, so the last increment is the first K for which
+// the file is missing; capped at kMaxAutoTracksPerChannel per channel).
+// For every channel that has auto tracks, g_sequence is primed with
+// track 1 and the sequence length is set to kAutoTrackSteps.
+void sdStoreLoadAutoTracks();
+
+// Advances the auto-track playback one step. Call after
+// advanceSequencerStep() while the sequencer is running: when the
+// 16-step bar wraps (g_stepIndex back to 0), each channel's lane is
+// replaced by the next loaded auto track file, wrapping back to K = 1
+// after the last file, so the files play in succession, each for 16 steps.
+void sdStorePlayAutoTracks();
 
 // Next track index to save for each channel (1-based).
 // Set by sdStoreScanTrackCounters(); bumped after each successful save.
