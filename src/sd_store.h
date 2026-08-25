@@ -17,7 +17,9 @@
 // the next free index. sdStoreScanTrackCounters() (called in setup before
 // the main loop) inspects the card and finds the highest existing
 // "chN[K].seq" index per channel so saves keep incrementing after reboot.
-// Loading a channel always loads its highest saved track.
+// Loading a channel cycles through its saved tracks: the first load
+// loads the highest saved track, subsequent loads load track 1, 2, ...
+// up to the highest track, then loop back to track 1 again.
 // -----------------------------------------------------------------------------
 
 // Initialize the SD card and create the /sequencore folder if needed.

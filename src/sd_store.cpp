@@ -32,6 +32,11 @@ constexpr const char *kRootDirPath = "/sequencore";
 
 uint8_t g_sdTrackCounter[kMidiChannelCount] = {1};
 
+// Per-channel position (1-based) into the ascending list of existing
+// tracks that the next sdStoreLoadChannel() call should load.
+// 0 means "not started yet" -> the first load grabs the last track.
+static uint8_t g_sdLoadCursor[kMidiChannelCount] = {0};
+
 // -----------------------------------------------------------------------------
 // Filename parsing: "chN[K].seq"
 // -----------------------------------------------------------------------------
@@ -264,22 +269,39 @@ bool sdStoreLoadChannel(uint8_t channel)
     return false;
   }
 
-  // Load the highest saved track for this channel.
-  uint8_t track = 0;
+  // Collect this channel's existing tracks in ascending order so we can
+  // cycle through them by position.
+  uint8_t existingTracks[255];
+  uint8_t trackCount = 0;
   for (uint8_t t = 1; t < g_sdTrackCounter[channel]; ++t)
   {
     char probe[64];
     buildChannelTrackPath(probe, channel, t);
     if (SD.exists(probe))
     {
-      track = t;
+      existingTracks[trackCount++] = t;
     }
   }
 
-  if (track == 0)
+  if (trackCount == 0)
   {
     return false;
   }
+
+  // Position (1-based) into existingTracks for this load.
+  uint8_t cursor = g_sdLoadCursor[channel];
+  if (cursor == 0)
+  {
+    // First load after boot: use the highest saved track.
+    cursor = trackCount;
+  }
+  else if (cursor > trackCount)
+  {
+    // Track list changed; restart from the first track.
+    cursor = 1;
+  }
+
+  const uint8_t track = existingTracks[cursor - 1];
 
   char path[64];
   buildChannelTrackPath(path, channel, track);
@@ -334,5 +356,15 @@ bool sdStoreLoadChannel(uint8_t channel)
   }
 
   f.close();
+
+  if (ok)
+  {
+    // Advance the cursor for the next load: after the highest track,
+    // wrap back to the first track.
+    g_sdLoadCursor[channel] = (cursor == trackCount)
+                                   ? 1
+                                   : static_cast<uint8_t>(cursor + 1);
+  }
+
   return ok;
 }
