@@ -8,7 +8,7 @@
 // -----------------------------------------------------------------------------
 // On-disk layout
 //
-//   /sequencore/ch<N>.seq   (N = 0..15, one file per MIDI channel lane)
+//   /sequencore/ch<N>[K].seq   (N = 0..15, K = track number)
 //
 // Every file is exactly kSequenceBinarySize bytes:
 //
@@ -29,6 +29,72 @@ constexpr uint8_t kSequenceFileVersion = 1;
 constexpr uint8_t kSequenceHeaderSize = 4;
 constexpr const char *kRootDirPath = "/sequencore";
 } // namespace
+
+uint8_t g_sdTrackCounter[kMidiChannelCount] = {1};
+
+// -----------------------------------------------------------------------------
+// Filename parsing: "chN[K].seq"
+// -----------------------------------------------------------------------------
+
+// Returns true if `name` is a track file, and on success writes the channel
+// (N) and track index (K) to outChannel / outTrack.
+static bool parseTrackFilename(
+    const char *name,
+    uint8_t *outChannel,
+    uint8_t *outTrack)
+{
+  // "ch" prefix.
+  if (name[0] != 'c' || name[1] != 'h')
+  {
+    return false;
+  }
+
+  uint8_t channel = 0;
+  const char *p = name + 2;
+
+  while (*p >= '0' && *p <= '9')
+  {
+    channel = static_cast<uint8_t>(
+        channel * 10 + static_cast<uint8_t>(*p - '0'));
+    ++p;
+  }
+
+  if (channel >= kMidiChannelCount)
+  {
+    return false;
+  }
+
+  // "[K]"
+  if (*p != '[')
+  {
+    return false;
+  }
+  ++p;
+
+  uint8_t track = 0;
+  while (*p >= '0' && *p <= '9')
+  {
+    track = static_cast<uint8_t>(
+        track * 10 + static_cast<uint8_t>(*p - '0'));
+    ++p;
+  }
+
+  if (track == 0 || *p != ']')
+  {
+    return false;
+  }
+  ++p;
+
+  // ".seq"
+  if (strcmp(p, ".seq") != 0)
+  {
+    return false;
+  }
+
+  *outChannel = channel;
+  *outTrack = track;
+  return true;
+}
 
 // -----------------------------------------------------------------------------
 // Internal helpers
@@ -51,14 +117,18 @@ static bool ensureRootDir()
   return true;
 }
 
-static void buildChannelPath(char *path, uint8_t channel)
+static void buildChannelTrackPath(
+    char *path,
+    uint8_t channel,
+    uint8_t track)
 {
   snprintf(
       path,
       64,
-      "%s/ch%u.seq",
+      "%s/ch%u[%u].seq",
       kRootDirPath,
-      static_cast<unsigned>(channel));
+      static_cast<unsigned>(channel),
+      static_cast<unsigned>(track));
 }
 
 // -----------------------------------------------------------------------------
@@ -79,6 +149,56 @@ bool sdStoreInit()
   return ensureRootDir();
 }
 
+void sdStoreScanTrackCounters()
+{
+  // Defaults: next free track is 1 for every channel.
+  for (uint8_t c = 0; c < kMidiChannelCount; ++c)
+  {
+    g_sdTrackCounter[c] = 1;
+  }
+
+  if (!sdIsReady())
+  {
+    return;
+  }
+
+  File dir = SD.open(kRootDirPath, FILE_READ);
+  if (!dir)
+  {
+    return;
+  }
+
+  // Walk every entry and remember the highest "chN[K].seq" track index K
+  // per channel N. The next save for channel N goes to K + 1.
+  for (File entry = dir.openNextFile(); entry;
+       entry = dir.openNextFile())
+  {
+    // name() returns a heap buffer owned by this File object; copy the
+    // string before we close the entry.
+    char name[64];
+    strncpy(name, entry.name(), sizeof(name) - 1);
+    name[sizeof(name) - 1] = '\0';
+    entry.close();
+
+    uint8_t channel = 0;
+    uint8_t track = 0;
+
+    if (!parseTrackFilename(name, &channel, &track))
+    {
+      continue;
+    }
+
+    // The counter holds the *next* index to write, so track K implies
+    // the counter must be at least K + 1.
+    if (track + 1 > g_sdTrackCounter[channel])
+    {
+      g_sdTrackCounter[channel] = static_cast<uint8_t>(track + 1);
+    }
+  }
+
+  dir.close();
+}
+
 bool sdStoreSaveChannel(uint8_t channel)
 {
   if (channel >= kMidiChannelCount)
@@ -91,8 +211,10 @@ bool sdStoreSaveChannel(uint8_t channel)
     return false;
   }
 
+  const uint8_t track = g_sdTrackCounter[channel];
+
   char path[64];
-  buildChannelPath(path, channel);
+  buildChannelTrackPath(path, channel, track);
 
   File f = SD.open(path, FILE_WRITE);
   if (!f)
@@ -111,11 +233,8 @@ bool sdStoreSaveChannel(uint8_t channel)
 
   if (ok)
   {
-    // g_sequence is [kMaxSequenceLength][kMidiChannelCount]; we want
-    // g_sequence[step][channel] for step = 0..g_sequenceLength-1, which is
-    // contiguous in memory because the second index (channel) is the
-    // fastest-varying one inside the innermost step.
-    // We must copy per step since the channel is the outer dimension here.
+    // g_sequence is [kMaxSequenceLength][kMidiChannelCount]; a channel's
+    // lanes are strided across steps, so each lane is written separately.
     for (uint8_t s = 0; s < g_sequenceLength && ok; ++s)
     {
       ok = f.write(&g_sequence[s][channel], sizeof(StepLaneState));
@@ -123,6 +242,12 @@ bool sdStoreSaveChannel(uint8_t channel)
   }
 
   f.close();
+
+  if (ok)
+  {
+    // Advance to the next free track index for this channel.
+    g_sdTrackCounter[channel] = static_cast<uint8_t>(track + 1);
+  }
 
   return ok;
 }
@@ -139,8 +264,25 @@ bool sdStoreLoadChannel(uint8_t channel)
     return false;
   }
 
+  // Load the highest saved track for this channel.
+  uint8_t track = 0;
+  for (uint8_t t = 1; t < g_sdTrackCounter[channel]; ++t)
+  {
+    char probe[64];
+    buildChannelTrackPath(probe, channel, t);
+    if (SD.exists(probe))
+    {
+      track = t;
+    }
+  }
+
+  if (track == 0)
+  {
+    return false;
+  }
+
   char path[64];
-  buildChannelPath(path, channel);
+  buildChannelTrackPath(path, channel, track);
 
   File f = SD.open(path, FILE_READ);
   if (!f)
@@ -149,18 +291,18 @@ bool sdStoreLoadChannel(uint8_t channel)
   }
 
   uint8_t header[kSequenceHeaderSize] = {0, 0, 0, 0};
-  if (f.read(header, sizeof(header)) != sizeof(header))
+  if (f.read(header, sizeof(header)) !=
+      static_cast<int>(sizeof(header)))
   {
     f.close();
     return false;
   }
 
-  f.close();
-
   if (header[0] != kSequenceFileMagic ||
       header[1] != kSequenceFileVersion ||
       header[2] != channel)
   {
+    f.close();
     return false;
   }
 
@@ -168,19 +310,7 @@ bool sdStoreLoadChannel(uint8_t channel)
   if (lenOnDisk < kMinSequenceLength ||
       lenOnDisk > kMaxSequenceLength)
   {
-    return false;
-  }
-
-  // Reopen for the lane payload.
-  File f2 = SD.open(path, FILE_READ);
-  if (!f2)
-  {
-    return false;
-  }
-
-  if (f2.read(header, sizeof(header)) != sizeof(header))
-  {
-    f2.close();
+    f.close();
     return false;
   }
 
@@ -188,7 +318,7 @@ bool sdStoreLoadChannel(uint8_t channel)
   for (uint8_t s = 0; s < lenOnDisk && ok; ++s)
   {
     StepLaneState lane;
-    if (f2.read(&lane, sizeof(StepLaneState)) !=
+    if (f.read(&lane, sizeof(StepLaneState)) !=
         static_cast<int>(sizeof(StepLaneState)))
     {
       ok = false;
@@ -203,6 +333,6 @@ bool sdStoreLoadChannel(uint8_t channel)
     g_sequence[s][channel] = StepLaneState{};
   }
 
-  f2.close();
+  f.close();
   return ok;
 }
