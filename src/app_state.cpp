@@ -126,7 +126,7 @@ uint8_t g_hwNotesHeld = 0;
 // -----------------------------------------------------------------------------
 
 elapsedMillis g_stepTimer;
-elapsedMillis g_clockPulseTimer;
+elapsedMicros g_clockPulseTimer;
 elapsedMillis g_ledFlashTimer;
 elapsedMillis g_statusTimer;
 elapsedMillis g_launchpadInitTimer;

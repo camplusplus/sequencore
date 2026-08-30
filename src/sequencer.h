@@ -7,7 +7,7 @@
 // -----------------------------------------------------------------------------
 
 uint16_t calculateStepDurationMs();
-uint16_t calculateClockPulseMs();
+uint32_t calculateClockPulseUs();
 
 // -----------------------------------------------------------------------------
 // MIDI output

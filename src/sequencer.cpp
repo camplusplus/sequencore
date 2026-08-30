@@ -51,12 +51,13 @@ uint16_t calculateStepDurationMs()
       4.0f);
 }
 
-uint16_t calculateClockPulseMs()
+// Duration of one MIDI clock pulse (µs) at the current tempo.
+// MIDI clock uses 24 pulses per beat, so this is
+// (60,000,000 µs per minute) / BPM / 24.
+// Integer µs math avoids the millisecond truncation error.
+uint32_t calculateClockPulseUs()
 {
-  return static_cast<uint16_t>(
-      60000.0f /
-      static_cast<float>(g_tempoBpm) /
-      24.0f);
+  return 60000000UL / g_tempoBpm / 24UL;
 }
 
 // -----------------------------------------------------------------------------

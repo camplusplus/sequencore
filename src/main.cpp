@@ -118,7 +118,7 @@ void loop()
   // ---------------------------------------------------------------------------
 
   if (g_running &&
-      g_clockPulseTimer >= calculateClockPulseMs())
+      g_clockPulseTimer >= calculateClockPulseUs())
   {
     g_clockPulseTimer = 0;
 

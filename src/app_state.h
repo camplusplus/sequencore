@@ -186,7 +186,7 @@ extern uint8_t g_hwNotesHeld;
 // -----------------------------------------------------------------------------
 
 extern elapsedMillis g_stepTimer;
-extern elapsedMillis g_clockPulseTimer;
+extern elapsedMicros g_clockPulseTimer;
 extern elapsedMillis g_ledFlashTimer;
 extern elapsedMillis g_statusTimer;
 extern elapsedMillis g_launchpadInitTimer;
