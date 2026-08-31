@@ -82,6 +82,7 @@ void midiOutSendStop()
 USBHost myusb;
 USBHub hub1(myusb);
 MIDIDevice_BigBuffer launchpad(myusb);
+IntervalTimer g_midiClockTimer;
 
 // -----------------------------------------------------------------------------
 // Sequence state
@@ -110,7 +111,7 @@ uint8_t g_swingPct = 0;
 
 uint8_t g_lastPressedChannel = 0;
 
-bool g_running = true;
+volatile bool g_running = true;
 bool g_recording = false;
 bool g_overdub = false;
 
@@ -126,7 +127,6 @@ uint8_t g_hwNotesHeld = 0;
 // -----------------------------------------------------------------------------
 
 elapsedMillis g_stepTimer;
-elapsedMicros g_clockPulseTimer;
 elapsedMillis g_ledFlashTimer;
 elapsedMillis g_statusTimer;
 elapsedMillis g_launchpadInitTimer;

@@ -666,6 +666,9 @@ void adjustLaunchpadTempo(int16_t delta)
   {
     g_tempoBpm = static_cast<uint16_t>(newTempo);
   }
+
+  // Reprogram the hardware clock timer for the new tempo.
+  restartMidiClockTimer();
 }
 
 // -----------------------------------------------------------------------------
@@ -720,6 +723,7 @@ void handleLaunchpadControl(byte note)
     if (g_tempoBpm > kMinTempoBpm)
     {
       g_tempoBpm -= 1;
+      restartMidiClockTimer();
     }
     break;
 
@@ -727,6 +731,7 @@ void handleLaunchpadControl(byte note)
     if (g_tempoBpm < kMaxTempoBpm)
     {
       g_tempoBpm += 1;
+      restartMidiClockTimer();
     }
     break;
 
@@ -739,12 +744,12 @@ void handleLaunchpadControl(byte note)
 
     if (g_running)
     {
-      // Resume cleanly: reset the step/clock timers so the next step
-      // begins on a fresh boundary. Playback then keeps looping
-      // forever until explicitly paused again.
+      // Resume cleanly: reset the step timer and restart the hardware
+      // clock timer's phase so the next pulse lands on a fresh boundary.
+      // Playback then keeps looping forever until explicitly paused again.
       g_stepTimer = 0;
       g_substepIndex = 0;
-      g_clockPulseTimer = 0;
+      restartMidiClockTimer();
 
       midiOutSendStart();
     }
@@ -912,7 +917,7 @@ void onLaunchpadControlChange(
         g_running = true;
         g_stepTimer = 0;
         g_substepIndex = 0;
-        g_clockPulseTimer = 0;
+        restartMidiClockTimer();
 
         midiOutSendStart();
       }

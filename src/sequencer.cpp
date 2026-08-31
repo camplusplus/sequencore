@@ -61,6 +61,30 @@ uint32_t calculateClockPulseUs()
 }
 
 // -----------------------------------------------------------------------------
+// MIDI clock hardware timer
+// -----------------------------------------------------------------------------
+
+namespace
+{
+  // Runs at interrupt level, at 24ppqn, independent of loop() timing.
+  // Safe to call unconditionally: sendStepClockPulse() no-ops when stopped.
+  void onMidiClockTimerTick()
+  {
+    sendStepClockPulse();
+  }
+}
+
+void startMidiClockTimer()
+{
+  g_midiClockTimer.begin(onMidiClockTimerTick, calculateClockPulseUs());
+}
+
+void restartMidiClockTimer()
+{
+  g_midiClockTimer.update(calculateClockPulseUs());
+}
+
+// -----------------------------------------------------------------------------
 // MIDI output
 // -----------------------------------------------------------------------------
 
