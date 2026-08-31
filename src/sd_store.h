@@ -77,6 +77,13 @@ void sdStoreLoadAutoTracks();
 // existing file loops that file forever.
 void sdStorePlayAutoTracks();
 
+// Pre-loads the next bar's auto track files into the RAM double buffer
+// (g_sdAutoNextLanes) so sdStorePlayAutoTracks() can swap from RAM at the
+// bar boundary instead of reading the SD card. Called automatically at
+// the end of each bar advance; failed channels keep
+// g_sdAutoNextReady[c] = false and fall back to an on-the-spot read.
+void sdStorePrimeNextAutoTracks();
+
 // Next track index to save for each channel (1-based).
 // Set by sdStoreScanTrackCounters(); bumped after each successful save.
 extern uint8_t g_sdTrackCounter[kMidiChannelCount];

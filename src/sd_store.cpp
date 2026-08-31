@@ -62,6 +62,13 @@ uint8_t g_sdAutoCount[kMidiChannelCount] = {0};
 // loaded in g_sequence for channel c.
 uint8_t g_sdAutoIndex[kMidiChannelCount] = {1};
 
+// Double buffer for auto track playback: the next bar's lanes per channel,
+// pre-loaded from the SD card while the current bar is playing, so the bar
+// swap is a plain RAM copy instead of an SD read. g_sdAutoNextReady[c] is
+// true when the buffer holds channel c's next file.
+StepLaneState g_sdAutoNextLanes[kMidiChannelCount][kAutoTrackSteps];
+bool g_sdAutoNextReady[kMidiChannelCount] = {false};
+
 // Per-channel position (1-based) into the ascending list of existing
 // tracks that the next sdStoreLoadChannel() call should load.
 // 0 means "not started yet" -> the first load grabs the last track.
@@ -598,8 +605,38 @@ void sdStoreLoadAutoTracks()
   }
 }
 
+// Pre-loads the *next* bar's auto track files into g_sdAutoNextLanes for
+// every channel that has files, so sdStorePlayAutoTracks() can swap from
+// RAM on the bar boundary instead of reading the SD card. A channel whose
+// file fails to load keeps g_sdAutoNextReady[c] = false and falls back to
+// an on-the-spot read at the swap.
+void sdStorePrimeNextAutoTracks()
+{
+  for (uint8_t c = 0; c < kMidiChannelCount; ++c)
+  {
+    g_sdAutoNextReady[c] = false;
+
+    if (g_sdAutoCount[c] == 0 || !sdIsReady())
+    {
+      continue;
+    }
+
+    // Same wrap-around as sdStorePlayAutoTracks(): the file after the one
+    // currently live, wrapping back to the first after the last.
+    const uint8_t next =
+        static_cast<uint8_t>(g_sdAutoIndex[c] % g_sdAutoCount[c] + 1);
+
+    char path[64];
+    buildAutoTrackPath(path, c, g_sdAutoKList[c][next - 1]);
+
+    g_sdAutoNextReady[c] =
+        loadAutoTrackFile(path, c, g_sdAutoNextLanes[c]);
+  }
+}
+
 void sdStorePlayAutoTracks()
 {
+
   // Advance the files only right after the last step (kAutoTrackSteps - 1)
   // of a 16-step bar has been played and the step index wrapped to 0.
   if (!g_running ||
@@ -630,16 +667,25 @@ void sdStorePlayAutoTracks()
         static_cast<uint8_t>(g_sdAutoIndex[c] % g_sdAutoCount[c] + 1);
     g_sdAutoIndex[c] = next;
 
-    // The track pattern lives on the card: read the file fresh and swap
-    // the channel lane in. If the read fails the previous pattern stays
-    // live.
-    char path[64];
-    buildAutoTrackPath(path, c, g_sdAutoKList[c][next - 1]);
-    if (loadAutoTrackFile(path, c, scratch))
+    // Prefer the pre-loaded double buffer: swapping from RAM is a plain
+    // copy and never touches the SD card mid-playback. If the buffer was
+    // not primed (or the prime failed) fall back to a fresh SD read; if
+    // that fails too the previous pattern stays live.
+    StepLaneState* src =
+        g_sdAutoNextReady[c] ? g_sdAutoNextLanes[c] : nullptr;
+
+    if (!src)
+    {
+      char path[64];
+      buildAutoTrackPath(path, c, g_sdAutoKList[c][next - 1]);
+      src = loadAutoTrackFile(path, c, scratch) ? scratch : nullptr;
+    }
+
+    if (src)
     {
       for (uint8_t s = 0; s < kAutoTrackSteps; ++s)
       {
-        g_sequence[s][c] = scratch[s];
+        g_sequence[s][c] = src[s];
       }
     }
   }
@@ -648,4 +694,8 @@ void sdStorePlayAutoTracks()
   {
     g_sequenceLength = kAutoTrackSteps;
   }
+
+  // Prime the double buffer for the following bar now that this swap is
+  // done; the next advance will read from it.
+  sdStorePrimeNextAutoTracks();
 }
