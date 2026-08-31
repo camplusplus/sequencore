@@ -11,7 +11,6 @@
 // MIDI input uses Serial1 RX (pin 0) via midiPort.
 // All MIDI output is broadcast on all six TX pins above.
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, midiPort);
-MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, midiOut1);
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial2, midiOut2);
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial3, midiOut3);
 MIDI_CREATE_INSTANCE(HardwareSerial, Serial4, midiOut4);
@@ -20,7 +19,7 @@ MIDI_CREATE_INSTANCE(HardwareSerial, Serial6, midiOut6);
 
 midi::MidiInterface<midi::SerialMIDI<HardwareSerial>> *kMidiOutPorts[
     kMidiOutPortCount] = {
-    &midiOut1,
+    &midiPort,
     &midiOut2,
     &midiOut3,
     &midiOut4,

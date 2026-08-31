@@ -10,12 +10,6 @@ void setup()
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWriteFast(LED_BUILTIN, LOW);
 
-  // ---------------------------------------------------------------------------
-  // Hardware DIN MIDI
-  // ---------------------------------------------------------------------------
-
-  midiPort.begin(MIDI_CHANNEL_OMNI);
-
   // Begin all six DIN MIDI output ports so the same data is
   // broadcast to every output pin.
   midiOutBeginAll(MIDI_CHANNEL_OMNI);

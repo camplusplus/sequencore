@@ -15,6 +15,11 @@
 // pins - Serial1 (pin 1), Serial2 (pin 8), Serial3 (pin 14), Serial4
 // (pin 17), Serial5 (pin 20) and Serial6 (pin 24).
 extern midi::MidiInterface<midi::SerialMIDI<HardwareSerial>> midiPort;
+extern midi::MidiInterface<midi::SerialMIDI<HardwareSerial>> midiOut2;
+extern midi::MidiInterface<midi::SerialMIDI<HardwareSerial>> midiOut3;
+extern midi::MidiInterface<midi::SerialMIDI<HardwareSerial>> midiOut4;
+extern midi::MidiInterface<midi::SerialMIDI<HardwareSerial>> midiOut5;
+extern midi::MidiInterface<midi::SerialMIDI<HardwareSerial>> midiOut6;
 
 // Hardware (PIT) timer that fires the 24ppqn MIDI clock (F8) ISR.
 extern IntervalTimer g_midiClockTimer;
