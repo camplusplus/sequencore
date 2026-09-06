@@ -344,17 +344,15 @@ void sendActiveStepNotes(uint8_t step)
       delayMicroseconds(oddStepDelayUs);
     }
 
+    // Hold the gate for a full step duration. The previous step's note is
+    // released by suppressLastStepNotes() before the next step starts, which
+    // makes a simple step behave as a 16th-note length gate instead of a
+    // click-like instant note-on/note-off pair.
     sendMidiMessage(
         channel,
         lane.substep[0].note,
         lane.substep[0].velocity,
         true);
-
-    sendMidiMessage(
-        channel,
-        lane.substep[0].note,
-        0,
-        false);
   }
 }
 
