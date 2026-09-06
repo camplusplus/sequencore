@@ -44,6 +44,18 @@ void handleLaunchpadControl(byte note);
 // Called every loop: tracks a long-press on a grid pad and opens
 // microstep editing for the held pad's step/lane after kMicrostepHoldMs.
 void handleMicrostepEditHold();
+
+// -----------------------------------------------------------------------------
+// Chord edit (blue mode + long-press a grid pad)
+// -----------------------------------------------------------------------------
+
+// Enters chord edit mode for the held step/lane (blue modifier mode,
+// grid pad held). step = the sequence step of the held pad,
+// channel = the grid row (MIDI channel) of the held pad.
+void enterChordEditMode(
+    uint8_t step,
+    uint8_t channel);
+
 // -----------------------------------------------------------------------------
 // USB MIDI callbacks
 // -----------------------------------------------------------------------------
