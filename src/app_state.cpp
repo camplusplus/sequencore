@@ -175,6 +175,11 @@ bool g_microstepEditing = false;
 uint8_t g_microstepEditStep = 0;
 uint8_t g_microstepEditChannel = 0;
 
+bool g_chordEditing = false;
+uint8_t g_chordEditStep = 0;
+uint8_t g_chordEditChannel = 0;
+uint8_t g_chordEditPage = 0;
+
 uint32_t g_microstepHoldStartMs = 0;
 bool g_microstepHoldActive = false;
 bool g_microstepHoldTriggered = false;

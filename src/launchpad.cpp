@@ -220,6 +220,45 @@ void refreshLaunchpadGridLedState()
       continue;
     }
 
+    // Chord edit mode: the selected row shows the base note plus any selected
+    // upper notes. The base note remains in slot 0; each column adds a higher
+    // note, so the row acts as an 8-note chord picker.
+    if (g_chordEditing &&
+        row == g_chordEditChannel &&
+        step == g_chordEditStep)
+    {
+      StepLaneState &editLane =
+          g_sequence[g_chordEditStep][g_chordEditChannel];
+      byte color = kLaunchpadColorOff;
+
+      // Page 0 is the base note + notes 1..7 above it. Pages 1..3 each add
+      // another 8-note block above the base: +9..+16, +17..+24, +25..+32.
+      if (g_chordEditPage == 0)
+      {
+        if (col == 0 && editLane.substep[0].active)
+        {
+          color = kLaunchpadColorWhiteHigh;
+        }
+        else if (col > 0 && col < kMicrostepMax &&
+                 editLane.substep[col].active)
+        {
+          color = kLaunchpadColorBlueLow;
+        }
+      }
+      else
+      {
+        const uint8_t slot = col;
+        if (slot < kMicrostepMax &&
+            editLane.substep[slot].active)
+        {
+          color = kLaunchpadColorBlueLow;
+        }
+      }
+
+      setLaunchpadLedColor(note, color);
+      continue;
+    }
+
     byte color;
 
     // Priority: step mute (whole column) > cell mute > active > off.
@@ -502,6 +541,79 @@ void stageLaunchpadPad(
     return;
   }
 
+  // Chord edit mode: the selected lane already has a base note. Each pad in
+  // the edited row adds a higher note relative to the current page, and the
+  // page can be scrolled right up to 4 times to reach +31 additional notes.
+  if (g_chordEditing)
+  {
+    if (!active)
+    {
+      return;
+    }
+
+    if (row != g_chordEditChannel ||
+        step != g_chordEditStep)
+    {
+      g_chordEditing = false;
+      refreshLaunchpadGridLedState();
+      return;
+    }
+
+    StepLaneState &editLane =
+        g_sequence[g_chordEditStep][g_chordEditChannel];
+
+    if (!editLane.substep[0].active)
+    {
+      g_chordEditing = false;
+      refreshLaunchpadGridLedState();
+      return;
+    }
+
+    const byte baseNote = editLane.substep[0].note;
+    const uint8_t page = g_chordEditPage;
+
+    // Page 0 adds +1..+7, then pages 1..3 add +9..+16, +17..+24, +25..+32.
+    const uint8_t interval =
+        (page == 0) ? (col > 0 ? col : 0)
+                    : (page * 8 + col + 1);
+
+    if (page == 0 && col == 0)
+    {
+      refreshLaunchpadGridLedState();
+      return;
+    }
+
+    if (interval >= 33 ||
+        baseNote + interval > 127)
+    {
+      return;
+    }
+
+    const uint8_t slot = col;
+    if (slot >= kMicrostepMax)
+    {
+      return;
+    }
+
+    if (editLane.substep[slot].active)
+    {
+      editLane.substep[slot].active = false;
+      editLane.substep[slot].note = 0;
+      editLane.substep[slot].velocity = 0;
+      editLane.muted = false;
+    }
+    else
+    {
+      editLane.substep[slot].active = true;
+      editLane.substep[slot].note = baseNote + interval;
+      editLane.substep[slot].velocity = 100;
+      editLane.muted = false;
+    }
+
+    refreshLaunchpadGridLedState();
+    return;
+  }
+
   // Modifier mode 1 (green, pad 97):
   //   short touch = mute/unmute just this cell (channel at that step)
   //   long hold   = mute/unmute the whole step/column (handled in loop)
@@ -615,6 +727,40 @@ void stageLaunchpadPad(
 }
 
 // -----------------------------------------------------------------------------
+// Chord edit (blue modifier + long-press a grid pad)
+// -----------------------------------------------------------------------------
+
+void enterChordEditMode(
+    uint8_t step,
+    uint8_t channel)
+{
+  if (step >= g_sequenceLength)
+  {
+    return;
+  }
+
+  if (channel >= kMidiChannelCount)
+  {
+    return;
+  }
+
+  StepLaneState &lane = g_sequence[step][channel];
+
+  // A chord needs a base note already recorded at the step.
+  if (!lane.substep[0].active)
+  {
+    return;
+  }
+
+  g_chordEditing = true;
+  g_chordEditStep = step;
+  g_chordEditChannel = channel;
+  g_chordEditPage = 0;
+
+  refreshLaunchpadGridLedState();
+}
+
+// -----------------------------------------------------------------------------
 // Microstep edit (long-press a grid pad)
 // -----------------------------------------------------------------------------
 
@@ -637,6 +783,12 @@ void handleMicrostepEditHold()
 
   g_microstepHoldTriggered = true;
   g_microstepHoldActive = false;
+
+  if (g_modifierMode == 4)
+  {
+    enterChordEditMode(g_microstepHoldStep, g_microstepHoldChannel);
+    return;
+  }
 
   g_microstepEditing = true;
   g_microstepEditStep = g_microstepHoldStep;
@@ -933,6 +1085,30 @@ void onLaunchpadControlChange(
 
   if (isLaunchpadTopRowControlNote(control))
   {
+    if (g_chordEditing &&
+        value != 0 &&
+        (control == kLaunchpadTopRowControlNoteMin + 2 ||
+         control == kLaunchpadTopRowControlNoteMin + 3))
+    {
+      // While editing a chord, the step-scroll pads act as a 4-page note
+      // browser: left/right moves through the +1..+7 / +9..+16 / +17..+24 /
+      // +25..+32 note groups above the base note.
+      if (control == kLaunchpadTopRowControlNoteMin + 2)
+      {
+        if (g_chordEditPage > 0)
+        {
+          --g_chordEditPage;
+        }
+      }
+      else if (g_chordEditPage < 3)
+      {
+        ++g_chordEditPage;
+      }
+
+      refreshLaunchpadGridLedState();
+      return;
+    }
+
     // Pad 97 (note 91+6) is the modifier: a 5-state toggle that cycles
     // on each press. 0 = none (off), 1 = green (mute), 2 = red (delete),
     // 3 = amber (save), 4 = blue (load). While set, the right column pads

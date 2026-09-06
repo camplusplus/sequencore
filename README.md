@@ -11,6 +11,7 @@ Progress:
 - Lights and color of buttons mapped
 - Scroll upper, lower midi channels mapped
 - Scroll left, right note steps mapped
+- MIDI clock as hardware interrupt timer
 - MIDI record sequence (press right column control buttons to record/overdub)
 - Set Tempo (pads Session+/Note-)
 - Added Modifier key (Custom)
@@ -26,7 +27,7 @@ Progress:
 - Save to microSD card: use two functions modes when pressed "Custom" function pad: 1. Save (amber), 2.Load (blue). Files are named ch1.seq - ch6.seq in folder sequencore. To save or load just press Channel pad on the right in appropriate function mode. 
 - Multiple tracks can be saved and loaded and they will have auto increment in brackets: ch1[1].seq. Loading will load last saved sequence first then loop from begining.
 - Autoload tracks named autochN[K].seq on start (N = channel, K = track number). Each existing file plays for 16 steps, then the next K is loaded and played, looping back to [1] after the last file (only existing files are cycled). For example, with autoch1[1].seq through autoch1[5].seq on the card, autoch1[5].seq plays after 4 loops of the first file.
-
+- Chord edit mode (blue modifier + long-press a grid pad with note) 4 pages scroll allows you to add 31 note higher after base note
 
   <img width="1834" height="616" alt="17868286194283894539707099595966" src="https://github.com/user-attachments/assets/77bb5b08-e9ed-4d48-aa5c-3f16cf06b46b" />
 

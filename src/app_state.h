@@ -273,6 +273,23 @@ extern uint8_t g_microstepEditStep;
 // The channel (grid row) whose substeps are shown/edited.
 extern uint8_t g_microstepEditChannel;
 
+// -----------------------------------------------------------------------------
+// Chord edit mode (blue modifier + long-press a grid pad)
+// -----------------------------------------------------------------------------
+
+// When true, a held step/lane is being edited as a chord whose base note
+// comes from slot 0 and additional notes are placed in higher slots.
+extern bool g_chordEditing;
+
+// The step/lane currently being chord-edited.
+extern uint8_t g_chordEditStep;
+extern uint8_t g_chordEditChannel;
+
+// Chord edit uses four note pages. Each page adds another 8-note block of
+// higher notes above the base note: page 0 = +1..+7, page 1 = +9..+16,
+// page 2 = +17..+24, page 3 = +25..+32.
+extern uint8_t g_chordEditPage;
+
 // Hold this long (ms) on a grid pad (no modifier) to open microstep
 // editing for that step/lane.
 constexpr uint16_t kMicrostepHoldMs = 400;
