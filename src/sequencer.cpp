@@ -481,6 +481,7 @@ void advanceSequencerStep()
   if (g_hasPlayedStep)
   {
     suppressLastStepNotes(g_lastPlayedStep);
+    suppressPendingSubstepNotes();
   }
 
   sendActiveStepNotes(g_stepIndex);
