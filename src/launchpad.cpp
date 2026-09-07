@@ -261,7 +261,8 @@ void refreshLaunchpadGridLedState()
 
     byte color;
 
-    // Priority: step mute (whole column) > cell mute > active > off.
+    // Priority: step mute (whole column) > cell mute > chord > microsteps
+    // > ordinary step > off.
     if (g_stepMuted[step])
     {
       // Whole column muted (long-press in green mode).
@@ -271,6 +272,20 @@ void refreshLaunchpadGridLedState()
     {
       // Individual cell muted (short-press in green mode).
       color = kLaunchpadColorGreenLow;
+    }
+    else if (g_sequence[step][laneChannel].hasChordNotes())
+    {
+      color = kLaunchpadColorBlueLow;
+    }
+    else if (g_sequence[step][laneChannel].substep[1].active ||
+             g_sequence[step][laneChannel].substep[2].active ||
+             g_sequence[step][laneChannel].substep[3].active ||
+             g_sequence[step][laneChannel].substep[4].active ||
+             g_sequence[step][laneChannel].substep[5].active ||
+             g_sequence[step][laneChannel].substep[6].active ||
+             g_sequence[step][laneChannel].substep[7].active)
+    {
+      color = kLaunchpadColorYellowHigh;
     }
     else if (g_sequence[step][laneChannel].isSubstepActive())
     {
