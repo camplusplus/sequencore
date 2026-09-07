@@ -707,10 +707,11 @@ void stageLaunchpadPad(
     refreshLaunchpadGridLedState();
   }
 
-  // Microstep edit mode: hold a grid pad (no modifier, not recording) to
-  // open editing for that step/lane. The hold is resolved in
+  // Hold a grid pad (without recording) to open microstep editing, or chord
+  // editing when the blue modifier is active. The hold is resolved in
   // handleMicrostepEditHold() on the next loop.
-  if (g_modifierMode == 0 && !g_recordingHeldNote)
+  if ((g_modifierMode == 0 || g_modifierMode == 4) &&
+      !g_recordingHeldNote)
   {
     g_microstepHoldStartMs = millis();
     g_microstepHoldActive = true;
