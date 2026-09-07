@@ -80,6 +80,7 @@ constexpr uint16_t kMinTempoBpm = 60;
 constexpr uint16_t kMaxTempoBpm = 200;
 
 constexpr uint8_t kMicrostepMax = 8;
+constexpr uint8_t kChordNoteMax = 31;
 constexpr uint8_t kSwingMax = 50;
 constexpr uint8_t kShuffleMax = 50;
 
@@ -118,6 +119,9 @@ struct StepLaneState
 {
   SubstepNote substep[kMicrostepMax];
   bool muted = false;
+  uint32_t chordActiveMask = 0;
+  byte chordNote[kChordNoteMax] = {};
+  byte chordVelocity[kChordNoteMax] = {};
 
   bool isSubstepActive() const
   {
@@ -141,6 +145,17 @@ struct StepLaneState
     *outNote = substep[k].note;
     *outVelocity = substep[k].velocity;
     return true;
+  }
+
+  bool hasChordNotes() const
+  {
+    return chordActiveMask != 0;
+  }
+
+  bool isChordNoteActive(uint8_t index) const
+  {
+    return index < kChordNoteMax &&
+           (chordActiveMask & (1UL << index)) != 0;
   }
 };
 
@@ -286,8 +301,8 @@ extern uint8_t g_chordEditStep;
 extern uint8_t g_chordEditChannel;
 
 // Chord edit uses four note pages. Each page adds another 8-note block of
-// higher notes above the base note: page 0 = +1..+7, page 1 = +9..+16,
-// page 2 = +17..+24, page 3 = +25..+32.
+// higher notes above the base note: page 0 = +1..+7, page 1 = +8..+15,
+// page 2 = +16..+23, page 3 = +24..+31.
 extern uint8_t g_chordEditPage;
 
 // Hold this long (ms) on a grid pad (no modifier) to open microstep

@@ -146,6 +146,7 @@ void clearCurrentStep(uint8_t step)
       lane.substep[k].active = false;
     }
 
+    lane.chordActiveMask = 0;
     lane.muted = false;
   }
 }
@@ -168,6 +169,7 @@ void deleteChannel(uint8_t channel)
       lane.substep[k].active = false;
     }
 
+    lane.chordActiveMask = 0;
     lane.muted = false;
   }
 
@@ -205,6 +207,7 @@ void recordCurrentStep(
       g_sequence[g_stepIndex][channel];
 
   lane.substep[0].active = true;
+  lane.chordActiveMask = 0;
   lane.substep[0].note = note;
   lane.substep[0].velocity = velocity;
   lane.muted = false;
@@ -303,6 +306,29 @@ void sendActiveStepNotes(uint8_t step)
       continue;
     }
 
+    if (lane.hasChordNotes())
+    {
+      sendMidiMessage(
+          channel,
+          lane.substep[0].note,
+          lane.substep[0].velocity,
+          true);
+
+      for (uint8_t i = 0; i < kChordNoteMax; ++i)
+      {
+        if (lane.isChordNoteActive(i))
+        {
+          sendMidiMessage(
+              channel,
+              lane.chordNote[i],
+              lane.chordVelocity[i],
+              true);
+        }
+      }
+
+      continue;
+    }
+
     if (laneHasExtraSubsteps(lane))
     {
       // This lane uses more than just the main note: the step is
@@ -318,6 +344,29 @@ void sendActiveStepNotes(uint8_t step)
         g_lastPlayedSubstepVelocity[channel] = velocity;
         g_lastPlayedSubstepActive[channel] = true;
       }
+      continue;
+    }
+
+    if (lane.hasChordNotes())
+    {
+      sendMidiMessage(
+          channel,
+          lane.substep[0].note,
+          0,
+          false);
+
+      for (uint8_t i = 0; i < kChordNoteMax; ++i)
+      {
+        if (lane.isChordNoteActive(i))
+        {
+          sendMidiMessage(
+              channel,
+              lane.chordNote[i],
+              0,
+              false);
+        }
+      }
+
       continue;
     }
 

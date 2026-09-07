@@ -224,32 +224,32 @@ void refreshLaunchpadGridLedState()
     // upper notes. The base note remains in slot 0; each column adds a higher
     // note, so the row acts as an 8-note chord picker.
     if (g_chordEditing &&
-        row == g_chordEditChannel &&
-        step == g_chordEditStep)
+        row == g_chordEditChannel)
     {
       StepLaneState &editLane =
           g_sequence[g_chordEditStep][g_chordEditChannel];
       byte color = kLaunchpadColorOff;
 
-      // Page 0 is the base note + notes 1..7 above it. Pages 1..3 each add
-      // another 8-note block above the base: +9..+16, +17..+24, +25..+32.
+      // Page 0 is the base note + notes 1..7 above it. Pages 1..3 add
+      // the remaining +8..+31 notes above the base.
       if (g_chordEditPage == 0)
       {
         if (col == 0 && editLane.substep[0].active)
         {
           color = kLaunchpadColorWhiteHigh;
         }
-        else if (col > 0 && col < kMicrostepMax &&
-                 editLane.substep[col].active)
+        else if (col > 0 &&
+                 editLane.isChordNoteActive(col - 1))
         {
           color = kLaunchpadColorBlueLow;
         }
       }
       else
       {
-        const uint8_t slot = col;
-        if (slot < kMicrostepMax &&
-            editLane.substep[slot].active)
+        const uint8_t slot =
+            g_chordEditPage * kMicrostepMax - 1 + col;
+        if (slot < kChordNoteMax &&
+            editLane.isChordNoteActive(slot))
         {
           color = kLaunchpadColorBlueLow;
         }
@@ -551,8 +551,7 @@ void stageLaunchpadPad(
       return;
     }
 
-    if (row != g_chordEditChannel ||
-        step != g_chordEditStep)
+    if (row != g_chordEditChannel)
     {
       g_chordEditing = false;
       refreshLaunchpadGridLedState();
@@ -572,10 +571,11 @@ void stageLaunchpadPad(
     const byte baseNote = editLane.substep[0].note;
     const uint8_t page = g_chordEditPage;
 
-    // Page 0 adds +1..+7, then pages 1..3 add +9..+16, +17..+24, +25..+32.
-    const uint8_t interval =
-        (page == 0) ? (col > 0 ? col : 0)
-                    : (page * 8 + col + 1);
+    // Page 0 adds +1..+7, then pages 1..3 add +8..+31.
+    const uint8_t slot =
+        page == 0
+            ? col - 1
+            : page * kMicrostepMax - 1 + col;
 
     if (page == 0 && col == 0)
     {
@@ -583,31 +583,24 @@ void stageLaunchpadPad(
       return;
     }
 
-    if (interval >= 33 ||
-        baseNote + interval > 127)
+    if (slot >= kChordNoteMax ||
+        baseNote + slot + 1 > 127)
     {
       return;
     }
 
-    const uint8_t slot = col;
-    if (slot >= kMicrostepMax)
+    const uint32_t slotMask = 1UL << slot;
+    if ((editLane.chordActiveMask & slotMask) != 0)
     {
-      return;
-    }
-
-    if (editLane.substep[slot].active)
-    {
-      editLane.substep[slot].active = false;
-      editLane.substep[slot].note = 0;
-      editLane.substep[slot].velocity = 0;
-      editLane.muted = false;
+      editLane.chordActiveMask &= ~slotMask;
+      editLane.chordNote[slot] = 0;
+      editLane.chordVelocity[slot] = 0;
     }
     else
     {
-      editLane.substep[slot].active = true;
-      editLane.substep[slot].note = baseNote + interval;
-      editLane.substep[slot].velocity = 100;
-      editLane.muted = false;
+      editLane.chordActiveMask |= slotMask;
+      editLane.chordNote[slot] = baseNote + slot + 1;
+      editLane.chordVelocity[slot] = editLane.substep[0].velocity;
     }
 
     refreshLaunchpadGridLedState();
@@ -682,6 +675,7 @@ void stageLaunchpadPad(
       lane.substep[k].active = false;
     }
 
+    lane.chordActiveMask = 0;
     lane.muted = false;
 
     refreshLaunchpadGridLedState();
@@ -756,6 +750,17 @@ void enterChordEditMode(
   g_chordEditStep = step;
   g_chordEditChannel = channel;
   g_chordEditPage = 0;
+
+  // A lane can be re-entered after its base note was changed. Keep existing
+  // chord notes only when they still fit above the current base.
+  for (uint8_t i = 0; i < kChordNoteMax; ++i)
+  {
+    if (lane.isChordNoteActive(i) &&
+        lane.chordNote[i] <= lane.substep[0].note)
+    {
+      lane.chordActiveMask &= ~(1UL << i);
+    }
+  }
 
   refreshLaunchpadGridLedState();
 }
@@ -1091,8 +1096,8 @@ void onLaunchpadControlChange(
          control == kLaunchpadTopRowControlNoteMin + 3))
     {
       // While editing a chord, the step-scroll pads act as a 4-page note
-      // browser: left/right moves through the +1..+7 / +9..+16 / +17..+24 /
-      // +25..+32 note groups above the base note.
+      // browser: left/right moves through the +1..+7 / +8..+15 / +16..+23 /
+      // +24..+31 note groups above the base note.
       if (control == kLaunchpadTopRowControlNoteMin + 2)
       {
         if (g_chordEditPage > 0)

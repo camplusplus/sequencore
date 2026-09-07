@@ -39,7 +39,7 @@
 namespace
 {
 constexpr uint8_t kSequenceFileMagic = 0x53;     // 'S'
-constexpr uint8_t kSequenceFileVersion = 1;
+constexpr uint8_t kSequenceFileVersion = 2;
 constexpr uint8_t kSequenceHeaderSize = 4;
 constexpr const char *kRootDirPath = "/sequencore";
 
