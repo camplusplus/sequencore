@@ -420,6 +420,30 @@ void suppressLastStepNotes(uint8_t step)
       continue;
     }
 
+    // Chord lanes hold every chord tone until the step boundary.
+    if (lane.hasChordNotes())
+    {
+      sendMidiMessage(
+          channel,
+          lane.substep[0].note,
+          0,
+          false);
+
+      for (uint8_t i = 0; i < kChordNoteMax; ++i)
+      {
+        if (lane.isChordNoteActive(i))
+        {
+          sendMidiMessage(
+              channel,
+              lane.chordNote[i],
+              0,
+              false);
+        }
+      }
+
+      continue;
+    }
+
     // Substep-grid lanes are released via suppressPendingSubstepNotes()
     // in advanceSequencerStep() instead, since the note actually held
     // may not be slot 0's note.
