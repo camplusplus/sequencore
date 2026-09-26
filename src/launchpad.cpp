@@ -912,9 +912,9 @@ void handleLaunchpadControl(byte note)
 
     if (g_running)
     {
-      // Resume cleanly: reset the step timer and restart the hardware
-      // clock timer's phase so the next pulse lands on a fresh boundary.
-      // Playback then keeps looping forever until explicitly paused again.
+      // Restart from the first step and reset timer phases so playback begins
+      // cleanly at the start of the sequence.
+      g_stepIndex = 0;
       g_stepTimer = 0;
       g_substepIndex = 0;
       restartMidiClockTimer();
@@ -923,7 +923,7 @@ void handleLaunchpadControl(byte note)
     }
     else
     {
-      // Pause: stays stopped until played again.
+      // Stop the MIDI transport; pressing again starts from step zero.
       midiOutSendStop();
     }
     break;
