@@ -299,13 +299,11 @@ void refreshLaunchpadGridLedState()
     setLaunchpadLedColor(note, color);
   }
 
-  // Channel scrolling.
-  // Pad 91 doubles as the shuffle-up pad in green modifier mode, so
-  // its LED shows the shuffle state of the last pressed channel.
+  // Channel scrolling / swing (green modifier mode).
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 0,
       g_modifierMode == 1
-          ? (g_channelShuffle[g_lastPressedChannel] > 0
+          ? (g_channelSwing[g_lastPressedChannel] >= kSwingMax
                  ? kLaunchpadColorAmberHigh
                  : kLaunchpadColorGreenLow)
           : (g_channelOffset > 0
@@ -315,7 +313,7 @@ void refreshLaunchpadGridLedState()
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 1,
       g_modifierMode == 1
-          ? (g_channelShuffle[g_lastPressedChannel] >= kShuffleMax
+          ? (g_channelSwing[g_lastPressedChannel] == 0
                  ? kLaunchpadColorAmberHigh
                  : kLaunchpadColorGreenLow)
           : ((g_channelOffset + 8) < kMidiChannelCount
@@ -351,11 +349,11 @@ void refreshLaunchpadControlLedState()
   // pad receive an off/on SysEx pair on every refresh, which re-triggers
   // the Launchpad LED driver and makes the pad visibly blink.
 
-  // Channel scrolling / shuffle (green modifier mode).
+  // Channel scrolling / swing (green modifier mode).
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 0,
       g_modifierMode == 1
-          ? (g_channelShuffle[g_lastPressedChannel] > 0
+          ? (g_channelSwing[g_lastPressedChannel] >= kSwingMax
                  ? kLaunchpadColorAmberHigh
                  : kLaunchpadColorGreenLow)
           : (g_channelOffset > 0
@@ -365,7 +363,7 @@ void refreshLaunchpadControlLedState()
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 1,
       g_modifierMode == 1
-          ? (g_channelShuffle[g_lastPressedChannel] >= kShuffleMax
+          ? (g_channelSwing[g_lastPressedChannel] == 0
                  ? kLaunchpadColorAmberHigh
                  : kLaunchpadColorGreenLow)
           : ((g_channelOffset + 8) < kMidiChannelCount
@@ -998,8 +996,6 @@ void onLaunchpadControlChange(
     const uint8_t internalChannel =
         (channelNumber - 1) + g_channelOffset;
 
-    // Track the last pressed right-column channel pad so the green-mode
-    // shuffle pads (91/92) act on that channel.
     if (value != 0 && internalChannel < kMidiChannelCount)
     {
       g_lastPressedChannel = internalChannel;
@@ -1148,15 +1144,13 @@ void onLaunchpadControlChange(
     {
       if (control == kLaunchpadTopRowControlNoteMin + 0)
       {
-        // Green modifier mode: pad 91 = shuffle up
-        // for the last pressed channel.
-        adjustChannelShuffle(g_lastPressedChannel, 1);
+        // Green modifier mode: pad 91 increases swing for the last selected channel.
+        adjustChannelSwing(g_lastPressedChannel, 1);
       }
       else if (control == kLaunchpadTopRowControlNoteMin + 1)
       {
-        // Green modifier mode: pad 92 = shuffle down
-        // for the last pressed channel.
-        adjustChannelShuffle(g_lastPressedChannel, -1);
+        // Green modifier mode: pad 92 decreases swing for the last selected channel.
+        adjustChannelSwing(g_lastPressedChannel, -1);
       }
       else if (control == kLaunchpadTopRowControlNoteMin + 2)
       {

@@ -43,7 +43,7 @@ void clearCurrentStep(uint8_t step);
 
 void deleteChannel(uint8_t channel);
 
-void adjustChannelShuffle(uint8_t channel, int8_t delta);
+void adjustChannelSwing(uint8_t channel, int8_t delta);
 
 void adjustSequenceLength(int8_t delta);
 

@@ -91,8 +91,6 @@ StepLaneState g_sequence[kMaxSequenceLength][kMidiChannelCount];
 
 uint8_t g_sequenceLength = kDefaultSequenceLength;
 
-uint8_t g_channelShuffle[kMidiChannelCount] = {0};
-
 // -----------------------------------------------------------------------------
 // Sequencer state
 // -----------------------------------------------------------------------------
@@ -106,8 +104,7 @@ uint8_t g_lastPlayedStep = 0;
 bool g_hasPlayedStep = false;
 
 uint16_t g_tempoBpm = 120;
-uint8_t g_swingPct = 0;
-
+uint8_t g_channelSwing[kMidiChannelCount] = {0};
 uint8_t g_lastPressedChannel = 0;
 
 volatile bool g_running = true;

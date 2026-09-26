@@ -82,7 +82,6 @@ constexpr uint16_t kMaxTempoBpm = 200;
 constexpr uint8_t kMicrostepMax = 8;
 constexpr uint8_t kChordNoteMax = 31;
 constexpr uint8_t kSwingMax = 50;
-constexpr uint8_t kShuffleMax = 50;
 
 constexpr uint8_t kLaunchpadColorOff = 0;
 constexpr uint8_t kLaunchpadColorWhiteLow = 1;
@@ -164,10 +163,6 @@ extern StepLaneState g_sequence[kMaxSequenceLength][kMidiChannelCount];
 // Current sequence length in steps (kMinSequenceLength..kMaxSequenceLength).
 extern uint8_t g_sequenceLength;
 
-// Per-channel shuffle (0..kShuffleMax). Applied to odd steps, in sync
-// with swing (odd-step microsecond delay), but independent of it.
-extern uint8_t g_channelShuffle[kMidiChannelCount];
-
 // -----------------------------------------------------------------------------
 // Sequencer state
 // -----------------------------------------------------------------------------
@@ -183,11 +178,7 @@ extern uint8_t g_lastPlayedStep;
 extern bool g_hasPlayedStep;
 
 extern uint16_t g_tempoBpm;
-extern uint8_t g_swingPct;
-
-// Channel corresponding to the most recently pressed right-column
-// channel pad. Shuffle up/down pads (91/92) act on this channel while
-// the green modifier is active.
+extern uint8_t g_channelSwing[kMidiChannelCount];
 extern uint8_t g_lastPressedChannel;
 
 // Read from the MIDI clock ISR as well as the main loop.
@@ -230,7 +221,7 @@ extern byte g_controlFlashNote;
 // Pad 97 modifier mode (5-state toggle, cycles on press).
 // 0 = none (LED off)
 // 1 = green (right column pads = mute channel; grid pads = mute cell/step;
-//             top row:  91 = shuffle up, 92 = shuffle down,
+//             top row:  91 = swing up, 92 = swing down,
 //                       93 = sequence length down, 94 = sequence length up,
 //                       95 = microstep division down, 96 = microstep division up)
 // 2 = red (right column pads = delete channel)
