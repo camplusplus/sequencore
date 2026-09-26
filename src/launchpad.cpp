@@ -914,8 +914,8 @@ void handleLaunchpadControl(byte note)
     {
       // Restart from the first step and reset timer phases so playback begins
       // cleanly at the start of the sequence.
-      g_stepIndex = 0;
-      g_stepTimer = 0;
+      g_stepIndex = 1;
+      g_stepTimer = 1;
       g_substepIndex = 0;
       restartMidiClockTimer();
 
