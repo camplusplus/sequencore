@@ -201,42 +201,11 @@ void recordCurrentStep(
     return;
   }
 
-  // Quantize to the nearest step. g_stepIndex already points at the
-  // NEXT step (advanceSequencerStep() increments it right after playing),
-  // while g_lastPlayedStep is the one currently sounding.
-  //   - first half of the current step -> record into the current step
-  //     (the hit was heard live via MIDI Thru, nothing to replay now)
-  //   - second half -> record into the next step, and skip that step's
-  //     upcoming playback once, otherwise the note fires again a moment
-  //     after the live hit (audible as a double / flam).
-  uint8_t targetStep = g_stepIndex;
-
-  if (g_running && g_hasPlayedStep)
-  {
-    const uint32_t elapsedMs = millis() - g_substepStepStartMs;
-    const uint32_t stepMs = calculateStepDurationMs();
-
-    if (elapsedMs < stepMs / 2)
-    {
-      targetStep = g_lastPlayedStep;
-    }
-    else
-    {
-      targetStep = g_stepIndex;
-      g_recordSkipStep[channel] = targetStep;
-    }
-  }
-
-  if (targetStep >= g_sequenceLength)
-  {
-    return;
-  }
-
   // Writing to the lane replaces only this channel's step at the
-  // target step index. Steps of other channels in the same column
+  // current step index. Steps of other channels in the same column
   // must stay intact.
   StepLaneState &lane =
-      g_sequence[targetStep][channel];
+      g_sequence[g_stepIndex][channel];
 
   lane.substep[0].active = true;
   lane.chordActiveMask = 0;
