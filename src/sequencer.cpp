@@ -389,15 +389,22 @@ void sendActiveStepNotes(uint8_t step)
       continue;
     }
 
-    // Hold the gate for a full step duration. The previous step's note is
-    // released by suppressLastStepNotes() before the next step starts, which
-    // makes a simple step behave as a 16th-note length gate instead of a
-    // click-like instant note-on/note-off pair.
-    sendMidiMessage(
-        channel,
-        lane.substep[0].note,
-        lane.substep[0].velocity,
-        true);
+    // Hold the gate for a full step duration. The held note is tracked the
+    // same way as substep notes and released by suppressPendingSubstepNotes()
+    // before the next step starts, so the note-off always matches the note
+    // that was actually played, even if the lane is edited, muted or
+    // replaced (auto tracks) while it is sounding.
+    if (lane.substep[0].active)
+    {
+      sendMidiMessage(
+          channel,
+          lane.substep[0].note,
+          lane.substep[0].velocity,
+          true);
+      g_lastPlayedSubstepNote[channel] = lane.substep[0].note;
+      g_lastPlayedSubstepVelocity[channel] = lane.substep[0].velocity;
+      g_lastPlayedSubstepActive[channel] = true;
+    }
   }
 }
 
@@ -440,24 +447,9 @@ void suppressLastStepNotes(uint8_t step)
       continue;
     }
 
-    // Substep-grid lanes are released via suppressPendingSubstepNotes()
-    // in advanceSequencerStep() instead, since the note actually held
-    // may not be slot 0's note.
-    if (laneHasExtraSubsteps(lane))
-    {
-      continue;
-    }
-
-    // Substep slots (k > 0) are played as immediate note-on/note-off
-    // pairs, so only the main note (slot 0) needs to be suppressed.
-    if (lane.substep[0].active && !lane.muted)
-    {
-      sendMidiMessage(
-          channel,
-          lane.substep[0].note,
-          0,
-          false);
-    }
+    // Single main notes and substep-grid lanes are released via
+    // suppressPendingSubstepNotes() in advanceSequencerStep() instead,
+    // which sends the note-off for the note actually held.
   }
 }
 
