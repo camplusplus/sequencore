@@ -198,6 +198,10 @@ uint8_t g_substepQueueCount = 0;
 uint8_t g_substepQueueNextIndex = 0;
 uint32_t g_substepStepStartMs = 0;
 
+uint8_t g_recordSkipStep[kMidiChannelCount] = {
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
 // Last note held per channel, used to send note-off at the next step
 // boundary (so substep notes are released cleanly instead of overlapping).
 byte g_lastPlayedSubstepNote[kMidiChannelCount] = {0};

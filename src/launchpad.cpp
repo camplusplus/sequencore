@@ -915,6 +915,7 @@ void handleLaunchpadControl(byte note)
       g_stepIndex = 0;
       g_stepTimer = 0;
       g_substepIndex = 0;
+      memset(g_recordSkipStep, 0xFF, sizeof(g_recordSkipStep));
       restartMidiClockTimer();
 
       midiOutSendStart();

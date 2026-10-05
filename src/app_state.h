@@ -320,6 +320,11 @@ extern uint8_t g_substepQueueNextIndex;
 // millis() when the current step started (for substep timing).
 extern uint32_t g_substepStepStartMs;
 
+// Per channel: a step that was just live-recorded ahead of the playhead
+// (already heard via MIDI Thru), so its next playback is skipped once to
+// avoid a double trigger. 0xFF = none.
+extern uint8_t g_recordSkipStep[kMidiChannelCount];
+
 // Last note held per channel, used to send note-off at the next step
 // boundary (so substep notes are released cleanly instead of overlapping).
 extern byte g_lastPlayedSubstepNote[kMidiChannelCount];
