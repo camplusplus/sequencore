@@ -232,7 +232,7 @@ extern bool g_launchpadControlLedsInitialized;
 extern byte g_lastPressedControlNote;
 extern byte g_controlFlashNote;
 
-// Pad 97 modifier mode (6-state toggle, cycles on press).
+// Pad 97 modifier mode (5-state toggle, cycles on press).
 // 0 = none (LED off)
 // 1 = green (right column pads = mute channel; grid pads = mute cell/step;
 //             top row:  91 = swing up, 92 = swing down,
@@ -241,25 +241,16 @@ extern byte g_controlFlashNote;
 // 2 = red (right column pads = delete channel)
 // 3 = amber (right column pads = save channel patterns)
 // 4 = blue (right column pads = load channel patterns)
-// 5 = white (Launchpad native Live/Note Mode: the grid pads supply the pitch
-//             themselves, so notes can be recorded without a hardware MIDI
-//             keyboard. Select the lane first with the right-column record
-//             buttons; recording is automatic once in note mode. Stopping
-//             the transport with a quick tap of the top-row play/stop pad
-//             (98) first keeps it paused: pads still record and sound live
-//             on the selected lane, but the sequence itself only plays back
-//             once that pad is tapped again.
-//             Entering this mode sends the Launchpad X SysEx
-//             sequence 0E 00 / 00 01 / 15 01; wrapping back to 0 restores
-//             Programmer Mode with 0E 01. Because pad 97 stops reporting in
-//             Live Mode, leaving note mode is a hold gesture: press and hold
-//             the top-row play/pause pad (98) for kNoteModeExitHoldMs and
-//             note mode leaves, returning to state 0. A quick tap of that
-//             pad keeps its normal play/pause meaning.)
+//
+// Launchpad note mode is NOT a modifier state any more: it is entered and
+// left by holding the top-row play/pause pad (98) - see kNoteModeEnterHoldMs
+// and kNoteModeExitHoldMs below. g_modifierMode stays 0 while note mode runs,
+// and entering it sends the Launchpad X SysEx sequence 0E 00 / 00 01 / 15 01
+// (leaving it restores Programmer Mode with 0E 01).
 extern uint8_t g_modifierMode;
 
 // -----------------------------------------------------------------------------
-// Launchpad note mode (modifier mode 5)
+// Launchpad note mode (entered by holding the play/pause pad)
 // -----------------------------------------------------------------------------
 
 // True while the Launchpad is back in its native Live/Note Mode. Grid pads
@@ -291,21 +282,27 @@ extern byte g_launchpadEchoNote;
 extern byte g_launchpadEchoPressure;
 
 // -----------------------------------------------------------------------------
-// Note-mode exit gesture (hold the play/pause pad)
+// Note-mode gesture (hold the play/pause pad to enter / leave note mode)
 // -----------------------------------------------------------------------------
 
-// Hold the top-row play/pause pad (98) this long (ms) while in note mode to
-// leave note mode. Deliberately longer than the 400 ms grid holds: that pad
-// also toggles the transport, so a normal tap must never leave note mode by
-// accident - only a hold that clearly survives the window is the gesture.
-constexpr uint16_t kNoteModeExitHoldMs = 700;
+// Hold the top-row play/pause pad (98) this long (ms) to ENTER note mode.
+// Deliberately longer than the 400 ms grid holds: that pad also toggles the
+// transport, so a normal tap must never switch modes by accident - only a
+// hold that clearly survives the window is the gesture.
+constexpr uint16_t kNoteModeEnterHoldMs = 700;
 
-// Tracks the long-press on the play/pause pad that leaves note mode. The
-// press starts the clock, handleLaunchpadNoteModeExitHold() fires the exit
-// from loop(), and the release decides whether the pad was just a tap.
-extern uint32_t g_noteModeExitHoldStartMs;
-extern bool g_noteModeExitHoldActive;
-extern bool g_noteModeExitHoldTriggered;
+// Leaving note mode needs a longer hold than entering it: inside note mode
+// that pad is tapped constantly to pause/unpause the transport while
+// recording, so the exit window sits clearly above the enter window.
+constexpr uint16_t kNoteModeExitHoldMs = 1200;
+
+// Tracks the long-press on the play/pause pad. The press starts the clock,
+// handleLaunchpadNoteModeHold() fires the enter/exit from loop() once the
+// pad has been held past the window for the mode we are in, and the release
+// decides whether the pad was just a tap (play/pause).
+extern uint32_t g_noteModeHoldStartMs;
+extern bool g_noteModeHoldActive;
+extern bool g_noteModeHoldTriggered;
 
 // Bit N set = channel N is muted (green modifier mode).
 extern uint32_t g_channelMuteMask;

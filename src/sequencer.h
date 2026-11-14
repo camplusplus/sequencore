@@ -61,6 +61,14 @@ void suppressLastStepNotes(uint8_t step);
 void advanceSequencerStep();
 void handleSubstepPlayback();
 
+// Release everything the transport still has sounding: the one note each
+// channel may be holding (main note or substep slot) plus any chord tones
+// held from the last played step. A step's note-off is normally sent at the
+// *next* step boundary, so this is what a stopped transport has to do
+// explicitly - otherwise pausing leaves the last note ringing on the outputs
+// until playback resumes.
+void releaseSoundingNotes();
+
 // -----------------------------------------------------------------------------
 // Hardware MIDI input
 // -----------------------------------------------------------------------------

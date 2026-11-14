@@ -209,9 +209,13 @@ void enterLaunchpadNoteMode()
   g_launchpadNoteMode = true;
   g_launchpadRecordStep = 0;
 
-  // The exit gesture (held play/pause pad) always starts from a clean slate.
-  g_noteModeExitHoldActive = false;
-  g_noteModeExitHoldTriggered = false;
+  // Note mode is no longer a modifier state, so the cycle colours stay off
+  // while it runs; leaving note mode lands on 0 the same way.
+  g_modifierMode = 0;
+
+  // The gesture (hold the play/pause pad) always starts from a clean slate.
+  g_noteModeHoldActive = false;
+  g_noteModeHoldTriggered = false;
 
   sendLaunchpadLiveMode();
   sendLaunchpadNoteLayout();
@@ -226,8 +230,8 @@ void exitLaunchpadNoteMode()
 {
   g_launchpadNoteMode = false;
 
-  // Leaving note mode always lands back on the "no modifier" state, whether
-  // the exit came from wrapping pad 97 or from the held play/pause pad (98).
+  // Leaving note mode always lands back on the "no modifier" state; the
+  // gesture that leaves it is the held play/pause pad (98).
   g_modifierMode = 0;
   g_launchpadRecordStep = 0;
 
@@ -286,16 +290,10 @@ void exitLaunchpadNoteMode()
 // never arrive as NoteOn here.
 static void cycleLaunchpadModifierMode()
 {
-  g_modifierMode = (g_modifierMode + 1) % 6;
-
-  if (g_modifierMode == 5)
-  {
-    enterLaunchpadNoteMode();
-  }
-  else if (g_launchpadNoteMode)
-  {
-    exitLaunchpadNoteMode();
-  }
+  // Note mode is not part of the cycle any more - it is entered and left by
+  // holding the play/pause pad (98), and pad 97 stops reporting in Live Mode
+  // anyway - so the cycle only ever walks the four modifier colours.
+  g_modifierMode = (g_modifierMode + 1) % 5;
 }
 
 static bool isChannelRecorded(uint8_t channel)
@@ -563,26 +561,28 @@ void refreshLaunchpadControlLedState()
           : kLaunchpadColorWhiteLow);
 
   // Modifier (Pad 97): 0 = off, 1 = green (mute), 2 = red (delete),
-  // 3 = amber (save), 4 = blue (load), 5 = white (launchpad note mode).
+  // 3 = amber (save), 4 = blue (load). Note mode is not part of the cycle
+  // any more, but keep this pad white while it runs so the mode is still
+  // visible on the device.
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 6,
-      g_modifierMode == 1
-          ? kLaunchpadColorGreenHigh
-          : (g_modifierMode == 2
-                 ? kLaunchpadColorRedHigh
-                 : (g_modifierMode == 3
-                        ? kLaunchpadColorAmberHigh
-                        : (g_modifierMode == 4
-                               ? kLaunchpadColorBlueLow
-                               : (g_modifierMode == 5
-                                      ? kLaunchpadColorWhiteHigh
+      g_launchpadNoteMode
+          ? kLaunchpadColorWhiteHigh
+          : (g_modifierMode == 1
+                 ? kLaunchpadColorGreenHigh
+                 : (g_modifierMode == 2
+                        ? kLaunchpadColorRedHigh
+                        : (g_modifierMode == 3
+                               ? kLaunchpadColorAmberHigh
+                               : (g_modifierMode == 4
+                                      ? kLaunchpadColorBlueLow
                                       : kLaunchpadColorOff)))));
 
-  // Run/stop. In note mode a held play/pause pad is the exit gesture, so
+  // Run/stop. A held play/pause pad is the enter/leave-note-mode gesture, so
   // amber means "this hold is being counted" instead of the run/pause color.
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 7,
-      g_noteModeExitHoldActive
+      g_noteModeHoldActive
           ? kLaunchpadColorAmberHigh
           : (g_running
                  ? kLaunchpadColorWhiteHigh
@@ -1076,34 +1076,41 @@ void handleMicrostepEditHold()
 }
 
 // -----------------------------------------------------------------------------
-// Note-mode exit gesture (hold the play/pause pad)
+// Note-mode gesture (hold the play/pause pad to enter / leave note mode)
 // -----------------------------------------------------------------------------
 
-// Called every loop: a play/pause pad (98) held down in note mode for
-// kNoteModeExitHoldMs leaves note mode. The press only starts the clock, so
-// the exit can fire while the pad is still held - the release then finds the
-// gesture already spent and leaves the transport alone.
-void handleLaunchpadNoteModeExitHold()
+// Called every loop: a play/pause pad (98) held down starts a clock. Once it
+// has been held past the window for the mode we are currently in -
+// kNoteModeEnterHoldMs outside note mode, kNoteModeExitHoldMs inside it -
+// the gesture fires while the pad is still held. The press never acts on the
+// transport itself, so the release can tell a tap (play/pause) from a
+// gesture that already switched note mode.
+void handleLaunchpadNoteModeHold()
 {
-  if (!g_launchpadNoteMode || !g_noteModeExitHoldActive)
+  if (!g_noteModeHoldActive || g_noteModeHoldTriggered)
   {
     return;
   }
 
-  if (g_noteModeExitHoldTriggered)
+  const uint16_t holdMs =
+      g_launchpadNoteMode ? kNoteModeExitHoldMs : kNoteModeEnterHoldMs;
+
+  if ((millis() - g_noteModeHoldStartMs) < holdMs)
   {
     return;
   }
 
-  if ((millis() - g_noteModeExitHoldStartMs) < kNoteModeExitHoldMs)
+  g_noteModeHoldTriggered = true;
+  g_noteModeHoldActive = false;
+
+  if (g_launchpadNoteMode)
   {
-    return;
+    exitLaunchpadNoteMode();
   }
-
-  g_noteModeExitHoldTriggered = true;
-  g_noteModeExitHoldActive = false;
-
-  exitLaunchpadNoteMode();
+  else
+  {
+    enterLaunchpadNoteMode();
+  }
 
   refreshLaunchpadControlLedState();
 }
@@ -1224,6 +1231,11 @@ void handleLaunchpadControl(byte note)
     else
     {
       // Stop the MIDI transport; pressing again starts from step zero.
+      // Clear anything still sounding first: the note-off for the step that
+      // just played is normally sent at the next step boundary, and that
+      // boundary never arrives while paused, so the last note would
+      // otherwise keep ringing (and re-articulate on resume).
+      releaseSoundingNotes();
       midiOutSendStop();
     }
     break;
@@ -1441,7 +1453,11 @@ void onLaunchpadControlChange(
     // MODIFIER MODE: mute / delete / save / load
     // ---------------------------------------------------------------------------
 
-    if (g_modifierMode > 0)
+    // Note mode keeps the right column inert: the recording lane is picked
+    // before note mode is entered, and g_modifierMode stays 0 while note mode
+    // runs, so without this guard the pads would fall through to the record-
+    // channel path below and re-arm the transport mid-recording.
+    if (g_launchpadNoteMode || g_modifierMode > 0)
     {
       // Act only on press so mute is a persistent toggle, not momentary.
       // (Right-column pads send a CC on press and another on release.)
@@ -1537,30 +1553,32 @@ void onLaunchpadControlChange(
   if (isLaunchpadTopRowControlNote(control))
   {
     // -----------------------------------------------------------------------
-    // NOTE MODE: the play/pause pad (98) doubles as the exit gesture
-    //   A press only starts the hold clock; handleLaunchpadNoteModeExitHold()
-    //   leaves note mode once the pad has been held for kNoteModeExitHoldMs.
-    //   Releasing before that keeps the pad's normal meaning, so a quick tap
-    //   still toggles the transport - just resolved on release rather than on
-    //   press, which is what lets the two gestures share one pad.
+    // PLAY/PAUSE PAD (98): tap = play/pause, hold = enter / leave note mode
+    //   A press only starts the hold clock; handleLaunchpadNoteModeHold()
+    //   switches note mode once the pad has been held past the window for the
+    //   mode we are in (kNoteModeEnterHoldMs outside note mode,
+    //   kNoteModeExitHoldMs inside it). Releasing before that keeps the
+    //   pad's normal meaning, so a quick tap still toggles the transport -
+    //   resolved on release rather than on press, which is what lets the
+    //   three meanings share one pad.
     // -----------------------------------------------------------------------
 
-    if (g_launchpadNoteMode &&
-        control == kLaunchpadTopRowControlNoteMin + 7)
+    if (control == kLaunchpadTopRowControlNoteMin + 7)
     {
       if (value != 0)
       {
-        g_noteModeExitHoldStartMs = millis();
-        g_noteModeExitHoldActive = true;
-        g_noteModeExitHoldTriggered = false;
+        g_noteModeHoldStartMs = millis();
+        g_noteModeHoldActive = true;
+        g_noteModeHoldTriggered = false;
 
         refreshLaunchpadControlLedState();
         return;
       }
 
-      // Release: a hold that already left note mode must not also flip the
-      // transport; a tap that never reached the window is the play/stop pad.
-      if (g_noteModeExitHoldActive && !g_noteModeExitHoldTriggered)
+      // Release: a hold that already switched note mode must not also flip
+      // the transport; a tap that never reached the window is the play/stop
+      // pad.
+      if (g_noteModeHoldActive && !g_noteModeHoldTriggered)
       {
         handleLaunchpadControl(control);
       }
@@ -1569,7 +1587,7 @@ void onLaunchpadControlChange(
         refreshLaunchpadControlLedState();
       }
 
-      g_noteModeExitHoldActive = false;
+      g_noteModeHoldActive = false;
       return;
     }
 
@@ -1597,9 +1615,10 @@ void onLaunchpadControlChange(
       return;
     }
 
-    // Pad 97 (note 91+6) is the modifier: a 6-state toggle that cycles
+    // Pad 97 (note 91+6) is the modifier: a 5-state toggle that cycles
     // on each press. 0 = none (off), 1 = green (mute), 2 = red (delete),
-    // 3 = amber (save), 4 = blue (load), 5 = white (launchpad note mode).
+    // 3 = amber (save), 4 = blue (load). Note mode is not part of the cycle
+    // - it is entered and left by holding the play/pause pad (98).
     // While set, the right column pads act on the current channel.
     if (control == kLaunchpadTopRowControlNoteMin + 6)
     {

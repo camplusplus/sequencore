@@ -464,6 +464,22 @@ static void suppressPendingSubstepNotes()
   }
 }
 
+// Stop-and-clear: the same release advanceSequencerStep() does at a step
+// boundary, applied when the transport is stopped instead. The note-off for
+// a step is normally sent by the *next* step, which never arrives while
+// paused, so without this the last played note (and any held chord tones or
+// substep note) keeps ringing for as long as the transport is paused.
+void releaseSoundingNotes()
+{
+  if (!g_hasPlayedStep)
+  {
+    return;
+  }
+
+  suppressLastStepNotes(g_lastPlayedStep);
+  suppressPendingSubstepNotes();
+}
+
 void advanceSequencerStep()
 {
   if (g_hasPlayedStep)

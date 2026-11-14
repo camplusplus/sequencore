@@ -13,8 +13,9 @@ void setLaunchpadLedColor(
 
 void sendLaunchpadProgramMode();
 
-// Launchpad note mode (modifier mode 5): put the device back into its native
-// Live/Note Mode so the grid pads supply the pitch themselves.
+// Launchpad note mode (entered by holding the play/pause pad 98): put the
+// device back into its native Live/Note Mode so the grid pads supply the
+// pitch themselves.
 void sendLaunchpadLiveMode();
 void sendLaunchpadNoteLayout();
 void sendLaunchpadScaleMode();
@@ -54,13 +55,16 @@ void handleLaunchpadControl(byte note);
 void handleMicrostepEditHold();
 
 // -----------------------------------------------------------------------------
-// Note-mode exit gesture (hold the play/pause pad)
+// Note-mode gesture (hold the play/pause pad to enter / leave note mode)
 // -----------------------------------------------------------------------------
 
-// Called every loop: while in note mode, a play/pause pad (98) that has been
-// held for kNoteModeExitHoldMs leaves note mode. A shorter press/release is
-// left to the pad's normal play/stop meaning.
-void handleLaunchpadNoteModeExitHold();
+// Called every loop: a play/pause pad (98) that was pressed starts a clock.
+// Once it has been held past the window for the mode we are currently in -
+// kNoteModeEnterHoldMs outside note mode, kNoteModeExitHoldMs inside it -
+// the gesture fires while the pad is still held. The press never acts on the
+// transport itself, so the release can tell a tap (play/pause) from a
+// gesture that already fired.
+void handleLaunchpadNoteModeHold();
 
 // -----------------------------------------------------------------------------
 // Chord edit (blue mode + long-press a grid pad)

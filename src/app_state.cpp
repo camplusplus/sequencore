@@ -143,7 +143,7 @@ byte g_lastHwVelocity = 0;
 uint8_t g_hwNotesHeld = 0;
 
 // -----------------------------------------------------------------------------
-// Launchpad note mode (modifier mode 5)
+// Launchpad note mode (entered by holding the play/pause pad)
 // -----------------------------------------------------------------------------
 
 bool g_launchpadNoteMode = false;
@@ -171,12 +171,12 @@ byte g_launchpadEchoNote = 0;
 byte g_launchpadEchoPressure = 0;
 
 // -----------------------------------------------------------------------------
-// Note-mode exit gesture (hold the play/pause pad)
+// Note-mode gesture (hold the play/pause pad to enter / leave note mode)
 // -----------------------------------------------------------------------------
 
-bool g_noteModeExitHoldActive = false;
-bool g_noteModeExitHoldTriggered = false;
-uint32_t g_noteModeExitHoldStartMs = 0;
+bool g_noteModeHoldActive = false;
+bool g_noteModeHoldTriggered = false;
+uint32_t g_noteModeHoldStartMs = 0;
 
 // -----------------------------------------------------------------------------
 // Timers
