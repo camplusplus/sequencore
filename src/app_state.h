@@ -234,11 +234,13 @@ extern byte g_controlFlashNote;
 // 4 = blue (right column pads = load channel patterns)
 // 5 = white (Launchpad native Live/Note Mode: the grid pads supply the pitch
 //             themselves, so notes can be recorded without a hardware MIDI
-//             keyboard. Entering this mode sends the Launchpad X SysEx
+//             keyboard. Select the lane first with the right-column record
+//             buttons; recording is automatic once in note mode.
+//             Entering this mode sends the Launchpad X SysEx
 //             sequence 0E 00 / 00 01 / 15 01; wrapping back to 0 restores
 //             Programmer Mode with 0E 01. Because pad 97 stops reporting in
 //             Live Mode, the bottom-right function pad is also an exit:
-//             pressing it (it reports as pitch 1 in Live Mode) leaves note
+//             pressing it (it reports as pitch 0 in Live Mode) leaves note
 //             mode and returns to state 0.)
 extern uint8_t g_modifierMode;
 

@@ -231,9 +231,9 @@ void exitLaunchpadNoteMode()
 }
 
 // Cycle the pad 97 modifier mode and enter/leave launchpad note mode
-// accordingly. Shared by the Control Change path (Programmer Mode) and the
-// NoteOn path (Live Mode), where the outer pads may deliver NoteOn instead
-// of Control Change.
+// accordingly. Reached only from the Control Change path (Programmer Mode)
+// now: in Live Mode Novation's own firmware owns the top-row pads, so they
+// never arrive as NoteOn here.
 static void cycleLaunchpadModifierMode()
 {
   g_modifierMode = (g_modifierMode + 1) % 6;
@@ -586,17 +586,22 @@ void refreshLaunchpadControlLedState()
 // address that Programmer Mode sends as a Control Change. Record that pitch
 // at the launchpad write cursor so a sequence can be built without a
 // hardware MIDI keyboard.
+//
+// The lane is the recording channel picked with the right-column buttons
+// before entering note mode (shifted by the scroll offset) - the same lane
+// the hardware keyboard records into. The Launchpad's own note channel is
+// deliberately ignored: Live Mode reports its pads on MIDI channel 2, which
+// would otherwise put every recorded pitch one lane over.
 void recordLaunchpadNotePitch(
     byte channel,
     byte note,
     byte velocity)
 {
-  // Note Mode delivers pitches on the Launchpad's own MIDI channel; use it
-  // as the lane, falling back to lane 0 if the device reports something else.
+  (void)channel;
+
+  // Same lane as handleHardwareMidiIn: right-column selection + scroll.
   const uint8_t laneChannel =
-      (channel < kMidiChannelCount)
-          ? (uint8_t)channel
-          : 0;
+      (uint8_t)((g_recordingChannelOffset + g_channelOffset) % kMidiChannelCount);
 
   if (g_launchpadRecordStep >= g_sequenceLength)
   {
@@ -1120,7 +1125,7 @@ void onLaunchpadNoteOn(
   if (g_launchpadNoteMode)
   {
     // Escape hatch: in Live Mode the bottom-right pad arrives as NoteOn on
-    // pitch 1, so catch it before it is mistaken for a recorded pitch.
+    // pitch 0, so catch it before it is mistaken for a recorded pitch.
     if (note == kLaunchpadNoteModeExitNote)
     {
       exitLaunchpadNoteMode();
@@ -1128,25 +1133,12 @@ void onLaunchpadNoteOn(
       return;
     }
 
-    // In Live Mode the outer pads can deliver NoteOn instead of Control
-    // Change. Their note numbers are pad addresses, not pitches, so route
-    // the top row back to the control handlers - this keeps tempo/scroll
-    // working and lets pad 97 cycle the modifier when it does report.
-    if (isLaunchpadTopRowControlNote(note))
-    {
-      if (note == kLaunchpadTopRowControlNoteMin + 6)
-      {
-        cycleLaunchpadModifierMode();
-      }
-      else
-      {
-        handleLaunchpadControl(note);
-      }
-
-      refreshLaunchpadControlLedState();
-      return;
-    }
-
+    // Nothing else is intercepted here: Novation's own Live-Mode firmware
+    // already gives the top-row pads their transport/tempo/scroll behaviour,
+    // so every other NoteOn is a pitch to record. The lane comes from the
+    // right-column record buttons selected before entering note mode, not
+    // from the Launchpad's own note channel (Live Mode reports its pads on
+    // channel 2, which would shift everything one lane over).
     recordLaunchpadNotePitch(
         channel,
         note,
@@ -1191,7 +1183,7 @@ void onLaunchpadControlChange(
 
   // ---------------------------------------------------------------------------
   // NOTE MODE ESCAPE HATCH: bottom-right function pad
-  //   In Live/Note Mode that pad reports as pitch 1, not as its Programmer-
+  //   In Live/Note Mode that pad reports as pitch 0, not as its Programmer-
   //   Mode pad address, and pad 97 stops reporting at all - so this pad is
   //   the guaranteed way back to Programmer Mode. Kept on both transports.
   // ---------------------------------------------------------------------------
