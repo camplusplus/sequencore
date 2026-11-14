@@ -1,0 +1,82 @@
+To return the **Novation Launchpad X** from Programmer Mode to its normal standalone Note Mode, send a SysEx command that switches the device back to **Note Mode**.
+
+Your current command:
+
+```
+F0 00 20 29 02 0C 0E 01 F7
+```
+
+uses `0E 01` to select Programmer Mode.
+
+The important part is changing the mode byte to `00`:
+
+```
+void sendLaunchpadNoteMode()
+{
+    static const uint8_t kNoteModeSysex[] =
+    {
+        0xF0,
+        0x00,
+        0x20,
+        0x29,
+        0x02,
+        0x0C,
+        0x0E,
+        0x00,
+        0xF7
+    };
+
+    launchpad.sendSysEx(
+        sizeof(kNoteModeSysex),
+        kNoteModeSysex,
+        true);
+
+    resetLaunchpadLedCache();
+}
+```
+
+According to Novation's documentation, Live Mode automatically selects Note Mode when the Launchpad is not in DAW mode.&#x20;
+
+[image](https://www.google.com/s2/favicons?domain=https://userguides.novationmusic.com\&sz=32)
+
+Novation User Guides+1
+
+
+
+**If you want to explicitly select Scale Mode as well**, you can send this additional SysEx command:
+
+```
+void sendLaunchpadScaleMode()
+{
+    static const uint8_t sysex[] = {
+        0xF0, 0x00, 0x20, 0x29,
+        0x02, 0x0C, 0x15, 0x01,
+        0xF7
+    };
+
+    launchpad.sendSysEx(sizeof(sysex), sysex, true);
+}
+```
+
+The relevant commands are:
+
+| Command | Purpose            |
+| ------- | ------------------ |
+| `0E 00` | Live Mode          |
+| `0E 01` | Programmer Mode    |
+| `00 01` | Select Note layout |
+| `15 00` | Chromatic Mode     |
+| `15 01` | Scale Mode         |
+
+**My recommendation for your Teensy sequencer:**
+
+Use this sequence when returning to normal playing:
+
+1. Send `0E 00` – Live Mode.
+2. Send `00 01` – Note layout.
+3. Send `15 01` – Scale Mode (if desired).
+4. Reset your LED cache.
+
+This way you can switch between your custom Teensy-controlled pad interface and the Launchpad's native playing interface without disconnecting USB.
+
+Reference: [Novation Launchpad X Configuration Messages](https://userguides.novationmusic.com/hc/en-gb/articles/24001463447826-Launchpad-X-configuration-messages?utm_source=chatgpt.com).

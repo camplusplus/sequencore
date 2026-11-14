@@ -28,6 +28,7 @@ Progress:
 - Multiple tracks can be saved and loaded and they will have auto increment in brackets: ch1[1].seq. Loading will load last saved sequence first then loop from begining.
 - Autoload tracks named autochN[K].seq on start (N = channel, K = track number). Each existing file plays for 16 steps, then the next K is loaded and played, looping back to [1] after the last file (only existing files are cycled). For example, with autoch1[1].seq through autoch1[5].seq on the card, autoch1[5].seq plays after 4 loops of the first file.
 - Chord edit mode (blue modifier + long-press a grid pad with note) uses four pages to add up to 31 higher notes; selected chord notes play together with the base note
+- Launchpad-only note mode: the 6th Modifier state (white) puts the Launchpad X back into its native Live/Note Mode (SysEx 0E 00, 00 01, 15 01) so the grid pads supply the pitch themselves — you can record a sequence with no hardware MIDI keyboard. Pads write into successive steps. Exit with the bottom-right note pad (it reports as pitch 0 in Live Mode), which returns to the off state and restores Programmer Mode (0E 01); wrapping pad 97 around also works when it reports.
 
   <img width="1834" height="616" alt="17868286194283894539707099595966" src="https://github.com/user-attachments/assets/77bb5b08-e9ed-4d48-aa5c-3f16cf06b46b" />
 

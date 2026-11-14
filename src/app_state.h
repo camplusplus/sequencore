@@ -76,6 +76,11 @@ constexpr uint8_t kLaunchpadTopRowControlNoteMax = 98;
 constexpr uint8_t kLaunchpadRightColumnControlNoteMin = 19;
 constexpr uint8_t kLaunchpadRightColumnControlNoteMax = 89;
 
+// Bottom-right function pad. In Live/Note Mode the Launchpad reports this
+// pad as pitch 0 rather than as its Programmer-Mode pad address (19), so 0
+// is what has to be matched to get back out of note mode.
+constexpr uint8_t kLaunchpadNoteModeExitNote = 0;
+
 constexpr uint16_t kMinTempoBpm = 60;
 constexpr uint16_t kMaxTempoBpm = 200;
 
@@ -218,7 +223,7 @@ extern bool g_launchpadControlLedsInitialized;
 extern byte g_lastPressedControlNote;
 extern byte g_controlFlashNote;
 
-// Pad 97 modifier mode (5-state toggle, cycles on press).
+// Pad 97 modifier mode (6-state toggle, cycles on press).
 // 0 = none (LED off)
 // 1 = green (right column pads = mute channel; grid pads = mute cell/step;
 //             top row:  91 = swing up, 92 = swing down,
@@ -227,7 +232,33 @@ extern byte g_controlFlashNote;
 // 2 = red (right column pads = delete channel)
 // 3 = amber (right column pads = save channel patterns)
 // 4 = blue (right column pads = load channel patterns)
+// 5 = white (Launchpad native Live/Note Mode: the grid pads supply the pitch
+//             themselves, so notes can be recorded without a hardware MIDI
+//             keyboard. Entering this mode sends the Launchpad X SysEx
+//             sequence 0E 00 / 00 01 / 15 01; wrapping back to 0 restores
+//             Programmer Mode with 0E 01. Because pad 97 stops reporting in
+//             Live Mode, the bottom-right function pad is also an exit:
+//             pressing it (it reports as pitch 1 in Live Mode) leaves note
+//             mode and returns to state 0.)
 extern uint8_t g_modifierMode;
+
+// -----------------------------------------------------------------------------
+// Launchpad note mode (modifier mode 5)
+// -----------------------------------------------------------------------------
+
+// True while the Launchpad is back in its native Live/Note Mode. Grid pads
+// then deliver real MIDI pitches (NoteOn) instead of the 11-98 pad addresses
+// (Control Change), which is what makes launchpad-only recording possible.
+extern bool g_launchpadNoteMode;
+
+// Velocity used for notes recorded from the Launchpad's own note grid when
+// the pad message carries no velocity. Never zero: a zero velocity means
+// "note off" to the sequencer and would drop the recorded note.
+extern byte g_launchpadRecordVelocity;
+
+// Write cursor for launchpad-only recording: the step the next tapped pad
+// lands on. Advances modulo g_sequenceLength after each recorded note.
+extern uint8_t g_launchpadRecordStep;
 
 // Bit N set = channel N is muted (green modifier mode).
 extern uint32_t g_channelMuteMask;

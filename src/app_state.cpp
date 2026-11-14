@@ -119,6 +119,18 @@ byte g_lastHwVelocity = 0;
 uint8_t g_hwNotesHeld = 0;
 
 // -----------------------------------------------------------------------------
+// Launchpad note mode (modifier mode 5)
+// -----------------------------------------------------------------------------
+
+bool g_launchpadNoteMode = false;
+
+// A zero velocity is a note-off to the sequencer, so launchpad-recorded
+// notes must never fall back to 0.
+byte g_launchpadRecordVelocity = 100;
+
+uint8_t g_launchpadRecordStep = 0;
+
+// -----------------------------------------------------------------------------
 // Timers
 // -----------------------------------------------------------------------------
 

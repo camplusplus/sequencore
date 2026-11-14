@@ -13,6 +13,14 @@ void setLaunchpadLedColor(
 
 void sendLaunchpadProgramMode();
 
+// Launchpad note mode (modifier mode 5): put the device back into its native
+// Live/Note Mode so the grid pads supply the pitch themselves.
+void sendLaunchpadLiveMode();
+void sendLaunchpadNoteLayout();
+void sendLaunchpadScaleMode();
+void enterLaunchpadNoteMode();
+void exitLaunchpadNoteMode();
+
 void refreshLaunchpadGridLedState();
 void refreshLaunchpadControlLedState();
 

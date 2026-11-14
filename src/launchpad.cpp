@@ -148,6 +148,106 @@ void sendLaunchpadProgramMode()
   resetLaunchpadLedCache();
 }
 
+// -----------------------------------------------------------------------------
+// Launchpad note mode (Live / Note Layout / Scale Mode)
+// -----------------------------------------------------------------------------
+
+// Send one single-parameter Launchpad X command:
+//   F0 00 20 29 02 0C <command> <param> F7
+// Same shape as sendLaunchpadProgramMode() (0E 01), which the device
+// already accepts from this sketch.
+static void sendLaunchpadModeCommand(
+    byte command,
+    byte param)
+{
+  const uint8_t sysex[] =
+      {
+          0xF0,
+          0x00,
+          0x20,
+          0x29,
+          0x02,
+          0x0C,
+          command,
+          param,
+          0xF7};
+
+  launchpad.sendSysEx(
+      sizeof(sysex),
+      sysex,
+      true);
+}
+
+// 0E 00 = Live Mode. This is what re-enables the device's native note
+// behaviour; 0E 01 (Programmer Mode) is what sendLaunchpadProgramMode()
+// sends, and it is what suppresses NoteOn from the grid pads.
+void sendLaunchpadLiveMode()
+{
+  sendLaunchpadModeCommand(
+      0x0E,
+      0x00);
+}
+
+// 00 01 = Note Layout: the grid pads are laid out as MIDI pitches.
+void sendLaunchpadNoteLayout()
+{
+  sendLaunchpadModeCommand(
+      0x00,
+      0x01);
+}
+
+// 15 01 = Scale Mode on: the note layout snaps to a scale.
+void sendLaunchpadScaleMode()
+{
+  sendLaunchpadModeCommand(
+      0x15,
+      0x01);
+}
+
+void enterLaunchpadNoteMode()
+{
+  g_launchpadNoteMode = true;
+  g_launchpadRecordStep = 0;
+
+  sendLaunchpadLiveMode();
+  sendLaunchpadNoteLayout();
+  sendLaunchpadScaleMode();
+
+  // The device rewrites its own display when it leaves Programmer Mode,
+  // so drop every cached LED color and let the next refresh re-send them.
+  resetLaunchpadLedCache();
+}
+
+void exitLaunchpadNoteMode()
+{
+  g_launchpadNoteMode = false;
+
+  // Leaving note mode always lands back on the "no modifier" state, whether
+  // the exit came from wrapping pad 97 or from the dedicated escape pad.
+  g_modifierMode = 0;
+  g_launchpadRecordStep = 0;
+
+  sendLaunchpadProgramMode();
+}
+
+// Cycle the pad 97 modifier mode and enter/leave launchpad note mode
+// accordingly. Shared by the Control Change path (Programmer Mode) and the
+// NoteOn path (Live Mode), where the outer pads may deliver NoteOn instead
+// of Control Change.
+static void cycleLaunchpadModifierMode()
+{
+  g_modifierMode = (g_modifierMode + 1) % 6;
+
+  if (g_modifierMode == 5)
+  {
+    enterLaunchpadNoteMode();
+  }
+  else if (g_launchpadNoteMode)
+  {
+    exitLaunchpadNoteMode();
+  }
+}
+
 static bool isChannelRecorded(uint8_t channel)
 {
   if (channel >= kMidiChannelCount)
@@ -170,6 +270,14 @@ static bool isChannelRecorded(uint8_t channel)
 
 void refreshLaunchpadGridLedState()
 {
+  // Note mode: the Launchpad owns the grid display itself (its Note Layout
+  // colors each pad with the pitch it plays), so do not fight it by writing
+  // sequence-state colors over it. Control-row LEDs still refresh.
+  if (g_launchpadNoteMode)
+  {
+    return;
+  }
+
   for (uint8_t note = kLaunchpadGridNoteMin;
        note <= kLaunchpadGridNoteMax;
        ++note)
@@ -405,7 +513,7 @@ void refreshLaunchpadControlLedState()
           : kLaunchpadColorWhiteLow);
 
   // Modifier (Pad 97): 0 = off, 1 = green (mute), 2 = red (delete),
-  // 3 = amber (save), 4 = blue (load).
+  // 3 = amber (save), 4 = blue (load), 5 = white (launchpad note mode).
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 6,
       g_modifierMode == 1
@@ -416,7 +524,9 @@ void refreshLaunchpadControlLedState()
                         ? kLaunchpadColorAmberHigh
                         : (g_modifierMode == 4
                                ? kLaunchpadColorBlueLow
-                               : kLaunchpadColorOff))));
+                               : (g_modifierMode == 5
+                                      ? kLaunchpadColorWhiteHigh
+                                      : kLaunchpadColorOff)))));
 
   // Run/stop.
   setLaunchpadLedColor(
@@ -466,6 +576,65 @@ void refreshLaunchpadControlLedState()
 // -----------------------------------------------------------------------------
 // Launchpad pad handling
 // -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+// Launchpad-only recording (note mode)
+// -----------------------------------------------------------------------------
+
+// In note mode the grid pads supply the pitch themselves, so a pad touch
+// arrives as a real NoteOn carrying a MIDI pitch instead of the 11-98 pad
+// address that Programmer Mode sends as a Control Change. Record that pitch
+// at the launchpad write cursor so a sequence can be built without a
+// hardware MIDI keyboard.
+void recordLaunchpadNotePitch(
+    byte channel,
+    byte note,
+    byte velocity)
+{
+  // Note Mode delivers pitches on the Launchpad's own MIDI channel; use it
+  // as the lane, falling back to lane 0 if the device reports something else.
+  const uint8_t laneChannel =
+      (channel < kMidiChannelCount)
+          ? (uint8_t)channel
+          : 0;
+
+  if (g_launchpadRecordStep >= g_sequenceLength)
+  {
+    g_launchpadRecordStep = 0;
+  }
+
+  StepLaneState &lane =
+      g_sequence[g_launchpadRecordStep][laneChannel];
+
+  // A pad NoteOn always carries a velocity, but keep a non-zero fallback:
+  // the sequencer treats velocity 0 as "note off" and would drop the note.
+  const byte resolvedVelocity =
+      velocity != 0
+          ? velocity
+          : g_launchpadRecordVelocity;
+
+  lane.substep[0].active = true;
+  lane.substep[0].note = note;
+  lane.substep[0].velocity = resolvedVelocity;
+
+  // A recorded cell replaces anything else that was in this step/lane.
+  for (uint8_t k = 1; k < kMicrostepMax; ++k)
+  {
+    lane.substep[k].active = false;
+  }
+
+  lane.chordActiveMask = 0;
+  lane.muted = false;
+
+  // Advance the write cursor so the next tapped pad lands on the next step.
+  ++g_launchpadRecordStep;
+  if (g_launchpadRecordStep >= g_sequenceLength)
+  {
+    g_launchpadRecordStep = 0;
+  }
+
+  refreshLaunchpadGridLedState();
+}
 
 void stageLaunchpadPad(
     byte channel,
@@ -946,6 +1115,45 @@ void onLaunchpadNoteOn(
 {
   g_seenLaunchpadInput = true;
 
+  // Note mode: the pad touch already carries the pitch, so record it
+  // directly instead of staging it as a grid-pad address.
+  if (g_launchpadNoteMode)
+  {
+    // Escape hatch: in Live Mode the bottom-right pad arrives as NoteOn on
+    // pitch 1, so catch it before it is mistaken for a recorded pitch.
+    if (note == kLaunchpadNoteModeExitNote)
+    {
+      exitLaunchpadNoteMode();
+      refreshLaunchpadControlLedState();
+      return;
+    }
+
+    // In Live Mode the outer pads can deliver NoteOn instead of Control
+    // Change. Their note numbers are pad addresses, not pitches, so route
+    // the top row back to the control handlers - this keeps tempo/scroll
+    // working and lets pad 97 cycle the modifier when it does report.
+    if (isLaunchpadTopRowControlNote(note))
+    {
+      if (note == kLaunchpadTopRowControlNoteMin + 6)
+      {
+        cycleLaunchpadModifierMode();
+      }
+      else
+      {
+        handleLaunchpadControl(note);
+      }
+
+      refreshLaunchpadControlLedState();
+      return;
+    }
+
+    recordLaunchpadNotePitch(
+        channel,
+        note,
+        velocity);
+    return;
+  }
+
   stageLaunchpadPad(
       channel,
       note,
@@ -960,6 +1168,13 @@ void onLaunchpadNoteOff(
 {
   g_seenLaunchpadInput = true;
 
+  // Note mode: releasing a pad must not erase the recorded note. Deleting
+  // is done after leaving note mode, in red (delete) modifier mode.
+  if (g_launchpadNoteMode)
+  {
+    return;
+  }
+
   stageLaunchpadPad(
       channel,
       note,
@@ -973,6 +1188,24 @@ void onLaunchpadControlChange(
     byte value)
 {
   (void)channel;
+
+  // ---------------------------------------------------------------------------
+  // NOTE MODE ESCAPE HATCH: bottom-right function pad
+  //   In Live/Note Mode that pad reports as pitch 1, not as its Programmer-
+  //   Mode pad address, and pad 97 stops reporting at all - so this pad is
+  //   the guaranteed way back to Programmer Mode. Kept on both transports.
+  // ---------------------------------------------------------------------------
+
+  if (g_launchpadNoteMode && control == kLaunchpadNoteModeExitNote)
+  {
+    if (value != 0)
+    {
+      exitLaunchpadNoteMode();
+    }
+
+    refreshLaunchpadControlLedState();
+    return;
+  }
 
   // ---------------------------------------------------------------------------
   // RIGHT COLUMN
@@ -1123,15 +1356,15 @@ void onLaunchpadControlChange(
       return;
     }
 
-    // Pad 97 (note 91+6) is the modifier: a 5-state toggle that cycles
+    // Pad 97 (note 91+6) is the modifier: a 6-state toggle that cycles
     // on each press. 0 = none (off), 1 = green (mute), 2 = red (delete),
-    // 3 = amber (save), 4 = blue (load). While set, the right column pads
-    // act on the current channel.
+    // 3 = amber (save), 4 = blue (load), 5 = white (launchpad note mode).
+    // While set, the right column pads act on the current channel.
     if (control == kLaunchpadTopRowControlNoteMin + 6)
     {
       if (value != 0)
       {
-        g_modifierMode = (g_modifierMode + 1) % 5;
+        cycleLaunchpadModifierMode();
       }
 
       refreshLaunchpadControlLedState();
