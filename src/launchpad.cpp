@@ -209,6 +209,10 @@ void enterLaunchpadNoteMode()
   g_launchpadNoteMode = true;
   g_launchpadRecordStep = 0;
 
+  // The exit gesture (held play/pause pad) always starts from a clean slate.
+  g_noteModeExitHoldActive = false;
+  g_noteModeExitHoldTriggered = false;
+
   sendLaunchpadLiveMode();
   sendLaunchpadNoteLayout();
   sendLaunchpadScaleMode();
@@ -223,7 +227,7 @@ void exitLaunchpadNoteMode()
   g_launchpadNoteMode = false;
 
   // Leaving note mode always lands back on the "no modifier" state, whether
-  // the exit came from wrapping pad 97 or from the dedicated escape pad.
+  // the exit came from wrapping pad 97 or from the held play/pause pad (98).
   g_modifierMode = 0;
   g_launchpadRecordStep = 0;
 
@@ -232,9 +236,10 @@ void exitLaunchpadNoteMode()
   // state the pause established instead of leaving a dangling START.
   if (g_launchpadEchoOpen)
   {
-    // The escape pad can be pressed while a grid pad is still held down, in
-    // which case its release never reaches the note-mode echo path - release
-    // whatever is still sounding so the instrument has no stuck key.
+    // The exit fires while the play/pause pad is still held down, so a grid
+    // pad that was left held has no release coming to the note-mode echo
+    // path - release whatever is still sounding so the instrument has no
+    // stuck key.
     if (g_launchpadEchoNote != 0)
     {
       const uint8_t laneChannel =
@@ -245,6 +250,21 @@ void exitLaunchpadNoteMode()
           g_launchpadEchoNote,
           0,
           (byte)(laneChannel + 1));
+
+      // Same for the pressure the touch left behind.
+      midiOutSendPolyAfterTouch(
+          g_launchpadEchoNote,
+          0,
+          (byte)(laneChannel + 1));
+
+      if (g_launchpadEchoPressure != 0)
+      {
+        midiOutSendAfterTouch(
+            0,
+            (byte)(laneChannel + 1));
+
+        g_launchpadEchoPressure = 0;
+      }
 
       g_launchpadEchoNote = 0;
     }
@@ -558,12 +578,15 @@ void refreshLaunchpadControlLedState()
                                       ? kLaunchpadColorWhiteHigh
                                       : kLaunchpadColorOff)))));
 
-  // Run/stop.
+  // Run/stop. In note mode a held play/pause pad is the exit gesture, so
+  // amber means "this hold is being counted" instead of the run/pause color.
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 7,
-      g_running
-          ? kLaunchpadColorWhiteHigh
-          : kLaunchpadColorRedHigh);
+      g_noteModeExitHoldActive
+          ? kLaunchpadColorAmberHigh
+          : (g_running
+                 ? kLaunchpadColorWhiteHigh
+                 : kLaunchpadColorRedHigh));
 
   // Right column: channel control pads.
   //   green  = muted
@@ -680,6 +703,21 @@ void recordLaunchpadNotePitch(
         resolvedVelocity,
         (byte)(laneChannel + 1));
 
+    // The X gives no pressure of its own, so reuse the pad's velocity as
+    // aftertouch on the lane just sounded: poly for the pitch that was
+    // touched (instruments with per-note pressure) and lane-wide for
+    // instruments that only have one pressure per channel. Both are
+    // answered by the release in onLaunchpadNoteOff.
+    midiOutSendPolyAfterTouch(
+        note,
+        resolvedVelocity,
+        (byte)(laneChannel + 1));
+
+    midiOutSendAfterTouch(
+        resolvedVelocity,
+        (byte)(laneChannel + 1));
+
+    g_launchpadEchoPressure = resolvedVelocity;
     g_launchpadEchoNote = note;
   }
 
@@ -1038,6 +1076,39 @@ void handleMicrostepEditHold()
 }
 
 // -----------------------------------------------------------------------------
+// Note-mode exit gesture (hold the play/pause pad)
+// -----------------------------------------------------------------------------
+
+// Called every loop: a play/pause pad (98) held down in note mode for
+// kNoteModeExitHoldMs leaves note mode. The press only starts the clock, so
+// the exit can fire while the pad is still held - the release then finds the
+// gesture already spent and leaves the transport alone.
+void handleLaunchpadNoteModeExitHold()
+{
+  if (!g_launchpadNoteMode || !g_noteModeExitHoldActive)
+  {
+    return;
+  }
+
+  if (g_noteModeExitHoldTriggered)
+  {
+    return;
+  }
+
+  if ((millis() - g_noteModeExitHoldStartMs) < kNoteModeExitHoldMs)
+  {
+    return;
+  }
+
+  g_noteModeExitHoldTriggered = true;
+  g_noteModeExitHoldActive = false;
+
+  exitLaunchpadNoteMode();
+
+  refreshLaunchpadControlLedState();
+}
+
+// -----------------------------------------------------------------------------
 // Launchpad pad handling
 // -----------------------------------------------------------------------------
 
@@ -1179,12 +1250,11 @@ void onLaunchpadNoteOn(
   // directly instead of staging it as a grid-pad address.
   if (g_launchpadNoteMode)
   {
-    // Escape hatch: in Live Mode the bottom-right pad arrives as NoteOn on
-    // pitch 0, so catch it before it is mistaken for a recorded pitch.
-    if (note == kLaunchpadNoteModeExitNote)
+    // The bottom-right pad arrives as NoteOn on pitch 0 in Live Mode; that
+    // is not a playable pitch, so drop it before it is recorded as one.
+    // Note mode now leaves through the held play/pause pad (98), not here.
+    if (note == kLaunchpadNoteModeIgnoredNote)
     {
-      exitLaunchpadNoteMode();
-      refreshLaunchpadControlLedState();
       return;
     }
 
@@ -1222,7 +1292,7 @@ void onLaunchpadNoteOff(
     // The touch echoed the pitch live when the transport was stopped, so the
     // release has to answer it on the same lane - otherwise the instrument
     // keeps the key held down until the next note on that pitch arrives.
-    if (!g_running && note != kLaunchpadNoteModeExitNote)
+    if (!g_running && note != kLaunchpadNoteModeIgnoredNote)
     {
       const uint8_t laneChannel =
           (uint8_t)((g_recordingChannelOffset + g_channelOffset) %
@@ -1232,6 +1302,22 @@ void onLaunchpadNoteOff(
           note,
           velocity,
           (byte)(laneChannel + 1));
+
+      // Answer the pressure the touch put on the lane, otherwise the
+      // instrument keeps squeezing a key that is no longer held.
+      midiOutSendPolyAfterTouch(
+          note,
+          0,
+          (byte)(laneChannel + 1));
+
+      if (g_launchpadEchoPressure != 0)
+      {
+        midiOutSendAfterTouch(
+            0,
+            (byte)(laneChannel + 1));
+
+        g_launchpadEchoPressure = 0;
+      }
 
       g_launchpadEchoNote = 0;
     }
@@ -1246,6 +1332,62 @@ void onLaunchpadNoteOff(
       false);
 }
 
+// -----------------------------------------------------------------------------
+// Launchpad pressure (Live/Note Mode aftertouch)
+// -----------------------------------------------------------------------------
+
+// The X's grid pads are not pressure-sensitive, so these messages only ever
+// show up from a controller that does have a pressure surface. Forward them
+// to the six outputs so pressure lands on the same instrument the pitches do:
+// in note mode the lane is the selected recording channel - exactly like
+// recordLaunchpadNotePitch - because Live Mode reports its pads on channel 2,
+// which would otherwise put the pressure one lane over. Outside note mode
+// nothing is remapped: Programmer Mode never sends pressure, so anything that
+// does arrive is passed through on its own channel.
+void onLaunchpadAfterTouchPoly(
+    byte channel,
+    byte note,
+    byte pressure)
+{
+  g_seenLaunchpadInput = true;
+
+  if (!g_launchpadNoteMode)
+  {
+    midiOutSendPolyAfterTouch(note, pressure, channel);
+    return;
+  }
+
+  const uint8_t laneChannel =
+      (uint8_t)((g_recordingChannelOffset + g_channelOffset) %
+                kMidiChannelCount);
+
+  midiOutSendPolyAfterTouch(
+      note,
+      pressure,
+      (byte)(laneChannel + 1));
+}
+
+void onLaunchpadAfterTouch(
+    byte channel,
+    byte pressure)
+{
+  g_seenLaunchpadInput = true;
+
+  if (!g_launchpadNoteMode)
+  {
+    midiOutSendAfterTouch(pressure, channel);
+    return;
+  }
+
+  const uint8_t laneChannel =
+      (uint8_t)((g_recordingChannelOffset + g_channelOffset) %
+                kMidiChannelCount);
+
+  midiOutSendAfterTouch(
+      pressure,
+      (byte)(laneChannel + 1));
+}
+
 void onLaunchpadControlChange(
     byte channel,
     byte control,
@@ -1254,20 +1396,16 @@ void onLaunchpadControlChange(
   (void)channel;
 
   // ---------------------------------------------------------------------------
-  // NOTE MODE ESCAPE HATCH: bottom-right function pad
-  //   In Live/Note Mode that pad reports as pitch 0, not as its Programmer-
-  //   Mode pad address, and pad 97 stops reporting at all - so this pad is
-  //   the guaranteed way back to Programmer Mode. Kept on both transports.
+  // NOTE MODE: bottom-right function pad reports as control 0
+  //   In Live/Note Mode that pad reports as pitch 0 / control 0 rather than
+  //   as its Programmer-Mode pad address, and 0 is not a usable control
+  //   number - so swallow it here instead of letting it fall through to the
+  //   generic control handling. Note mode leaves through the held play/pause
+  //   pad (98), handled in the top-row branch below.
   // ---------------------------------------------------------------------------
 
-  if (g_launchpadNoteMode && control == kLaunchpadNoteModeExitNote)
+  if (g_launchpadNoteMode && control == kLaunchpadNoteModeIgnoredNote)
   {
-    if (value != 0)
-    {
-      exitLaunchpadNoteMode();
-    }
-
-    refreshLaunchpadControlLedState();
     return;
   }
 
@@ -1398,6 +1536,43 @@ void onLaunchpadControlChange(
 
   if (isLaunchpadTopRowControlNote(control))
   {
+    // -----------------------------------------------------------------------
+    // NOTE MODE: the play/pause pad (98) doubles as the exit gesture
+    //   A press only starts the hold clock; handleLaunchpadNoteModeExitHold()
+    //   leaves note mode once the pad has been held for kNoteModeExitHoldMs.
+    //   Releasing before that keeps the pad's normal meaning, so a quick tap
+    //   still toggles the transport - just resolved on release rather than on
+    //   press, which is what lets the two gestures share one pad.
+    // -----------------------------------------------------------------------
+
+    if (g_launchpadNoteMode &&
+        control == kLaunchpadTopRowControlNoteMin + 7)
+    {
+      if (value != 0)
+      {
+        g_noteModeExitHoldStartMs = millis();
+        g_noteModeExitHoldActive = true;
+        g_noteModeExitHoldTriggered = false;
+
+        refreshLaunchpadControlLedState();
+        return;
+      }
+
+      // Release: a hold that already left note mode must not also flip the
+      // transport; a tap that never reached the window is the play/stop pad.
+      if (g_noteModeExitHoldActive && !g_noteModeExitHoldTriggered)
+      {
+        handleLaunchpadControl(control);
+      }
+      else
+      {
+        refreshLaunchpadControlLedState();
+      }
+
+      g_noteModeExitHoldActive = false;
+      return;
+    }
+
     if (g_chordEditing &&
         value != 0 &&
         (control == kLaunchpadTopRowControlNoteMin + 2 ||

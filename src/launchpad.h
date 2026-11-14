@@ -54,6 +54,15 @@ void handleLaunchpadControl(byte note);
 void handleMicrostepEditHold();
 
 // -----------------------------------------------------------------------------
+// Note-mode exit gesture (hold the play/pause pad)
+// -----------------------------------------------------------------------------
+
+// Called every loop: while in note mode, a play/pause pad (98) that has been
+// held for kNoteModeExitHoldMs leaves note mode. A shorter press/release is
+// left to the pad's normal play/stop meaning.
+void handleLaunchpadNoteModeExitHold();
+
+// -----------------------------------------------------------------------------
 // Chord edit (blue mode + long-press a grid pad)
 // -----------------------------------------------------------------------------
 
@@ -82,3 +91,15 @@ void onLaunchpadControlChange(
     byte channel,
     byte control,
     byte value);
+
+// Live/Note Mode pressure: 0xA0 applies to one held pad, 0xD0 to the whole
+// channel. USBHost_t36 routes them through the velocity-change and
+// aftertouch slots, both of which default to NULL.
+void onLaunchpadAfterTouchPoly(
+    byte channel,
+    byte note,
+    byte pressure);
+
+void onLaunchpadAfterTouch(
+    byte channel,
+    byte pressure);

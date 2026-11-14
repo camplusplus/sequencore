@@ -39,6 +39,11 @@ void midiOutSendClock();
 void midiOutSendStart();
 void midiOutSendStop();
 
+// Aftertouch: monophonic (0xD0, one pressure per channel) and polyphonic
+// (0xA0, one pressure per held note).
+void midiOutSendAfterTouch(byte pressure, byte channel);
+void midiOutSendPolyAfterTouch(byte note, byte pressure, byte channel);
+
 // Duration (ms) the built-in LED stays on after a MIDI input flash.
 constexpr uint16_t kLedFlashMs = 30;
 
@@ -78,8 +83,8 @@ constexpr uint8_t kLaunchpadRightColumnControlNoteMax = 89;
 
 // Bottom-right function pad. In Live/Note Mode the Launchpad reports this
 // pad as pitch 0 rather than as its Programmer-Mode pad address (19), so 0
-// is what has to be matched to get back out of note mode.
-constexpr uint8_t kLaunchpadNoteModeExitNote = 0;
+// is what has to be recognised and ignored - it is not a playable pitch.
+constexpr uint8_t kLaunchpadNoteModeIgnoredNote = 0;
 
 constexpr uint16_t kMinTempoBpm = 60;
 constexpr uint16_t kMaxTempoBpm = 200;
@@ -240,16 +245,17 @@ extern byte g_controlFlashNote;
 //             themselves, so notes can be recorded without a hardware MIDI
 //             keyboard. Select the lane first with the right-column record
 //             buttons; recording is automatic once in note mode. Stopping
-//             the transport with the top-row play/stop pad (98) first keeps
-//             it paused: pads still record and sound live on the selected
-//             lane, but the sequence itself only plays back once that pad
-//             is pressed again.
+//             the transport with a quick tap of the top-row play/stop pad
+//             (98) first keeps it paused: pads still record and sound live
+//             on the selected lane, but the sequence itself only plays back
+//             once that pad is tapped again.
 //             Entering this mode sends the Launchpad X SysEx
 //             sequence 0E 00 / 00 01 / 15 01; wrapping back to 0 restores
 //             Programmer Mode with 0E 01. Because pad 97 stops reporting in
-//             Live Mode, the bottom-right function pad is also an exit:
-//             pressing it (it reports as pitch 0 in Live Mode) leaves note
-//             mode and returns to state 0.)
+//             Live Mode, leaving note mode is a hold gesture: press and hold
+//             the top-row play/pause pad (98) for kNoteModeExitHoldMs and
+//             note mode leaves, returning to state 0. A quick tap of that
+//             pad keeps its normal play/pause meaning.)
 extern uint8_t g_modifierMode;
 
 // -----------------------------------------------------------------------------
@@ -278,6 +284,28 @@ extern bool g_launchpadEchoOpen;
 // Pitch of the last paused note-mode touch that is still sounding on the
 // outputs (0 = none), so leaving note mode mid-hold can release it.
 extern byte g_launchpadEchoNote;
+
+// Lane-wide (monophonic) aftertouch pressure currently in effect from a
+// paused note-mode touch (0 = none). Pad velocity is reused as pressure, so
+// the release has to answer it exactly like the NoteOff answers the NoteOn.
+extern byte g_launchpadEchoPressure;
+
+// -----------------------------------------------------------------------------
+// Note-mode exit gesture (hold the play/pause pad)
+// -----------------------------------------------------------------------------
+
+// Hold the top-row play/pause pad (98) this long (ms) while in note mode to
+// leave note mode. Deliberately longer than the 400 ms grid holds: that pad
+// also toggles the transport, so a normal tap must never leave note mode by
+// accident - only a hold that clearly survives the window is the gesture.
+constexpr uint16_t kNoteModeExitHoldMs = 700;
+
+// Tracks the long-press on the play/pause pad that leaves note mode. The
+// press starts the clock, handleLaunchpadNoteModeExitHold() fires the exit
+// from loop(), and the release decides whether the pad was just a tap.
+extern uint32_t g_noteModeExitHoldStartMs;
+extern bool g_noteModeExitHoldActive;
+extern bool g_noteModeExitHoldTriggered;
 
 // Bit N set = channel N is muted (green modifier mode).
 extern uint32_t g_channelMuteMask;

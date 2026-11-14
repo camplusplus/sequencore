@@ -562,8 +562,6 @@ void handleHardwareMidiIn()
   const byte data1 = midiPort.getData1();
   const byte data2 = midiPort.getData2();
 
-  (void)channel;
-
   // ---------------------------------------------------------------------------
   // NOTE ON
   // ---------------------------------------------------------------------------
@@ -611,6 +609,26 @@ void handleHardwareMidiIn()
       --g_hwNotesHeld;
     }
 
+    return;
+  }
+
+  // ---------------------------------------------------------------------------
+  // AFTERTOUCH (pass-through)
+  // ---------------------------------------------------------------------------
+
+  // A pressure-sensitive keyboard keeps sending while a key is held down.
+  // Nothing in a sequence carries pressure, so these messages are not
+  // recorded - they are forwarded straight to the six outputs on the channel
+  // they arrived on, which is what a hardware THRU would do.
+  if (type == midi::AfterTouchChannel)
+  {
+    midiOutSendAfterTouch(data1, channel);
+    return;
+  }
+
+  if (type == midi::AfterTouchPoly)
+  {
+    midiOutSendPolyAfterTouch(data1, data2, channel);
     return;
   }
 }

@@ -78,6 +78,25 @@ void midiOutSendStop()
   }
 }
 
+// Monophonic aftertouch (0xD0): one pressure value that applies to every
+// held note on the channel.
+void midiOutSendAfterTouch(byte pressure, byte channel)
+{
+  for (uint8_t i = 0; i < kMidiOutPortCount; ++i)
+  {
+    kMidiOutPorts[i]->sendAfterTouch(pressure, channel);
+  }
+}
+
+// Polyphonic aftertouch (0xA0): pressure for one specific held note.
+void midiOutSendPolyAfterTouch(byte note, byte pressure, byte channel)
+{
+  for (uint8_t i = 0; i < kMidiOutPortCount; ++i)
+  {
+    kMidiOutPorts[i]->sendAfterTouch(note, pressure, channel);
+  }
+}
+
 USBHost myusb;
 USBHub hub1(myusb);
 MIDIDevice_BigBuffer launchpad(myusb);
@@ -145,6 +164,19 @@ bool g_launchpadEchoOpen = false;
 // (0 = none). Leaving note mode while a pad is still held down releases it
 // so the instrument never keeps a stuck key.
 byte g_launchpadEchoNote = 0;
+
+// Lane-wide aftertouch pressure a paused note-mode touch left on the
+// outputs (0 = none). Cleared when the pad is released or note mode is
+// left, so the instrument never keeps stale pressure.
+byte g_launchpadEchoPressure = 0;
+
+// -----------------------------------------------------------------------------
+// Note-mode exit gesture (hold the play/pause pad)
+// -----------------------------------------------------------------------------
+
+bool g_noteModeExitHoldActive = false;
+bool g_noteModeExitHoldTriggered = false;
+uint32_t g_noteModeExitHoldStartMs = 0;
 
 // -----------------------------------------------------------------------------
 // Timers

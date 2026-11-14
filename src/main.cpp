@@ -26,6 +26,13 @@ void setup()
   launchpad.setHandleNoteOff(onLaunchpadNoteOff);
   launchpad.setHandleControlChange(onLaunchpadControlChange);
 
+  // Pressure slots: USBHost_t36 parses 0xA0 (per-note aftertouch) into the
+  // velocity-change handler and 0xD0 (channel aftertouch) into its aftertouch
+  // handler. Both default to NULL, so without these the Launchpad's pressure
+  // messages would be parsed and silently dropped.
+  launchpad.setHandleAfterTouchPoly(onLaunchpadAfterTouchPoly);
+  launchpad.setHandleAfterTouch(onLaunchpadAfterTouch);
+
   // ---------------------------------------------------------------------------
   // SD card (built-in Teensy 4.1 SDIO slot)
   // ---------------------------------------------------------------------------
@@ -64,6 +71,12 @@ void loop()
   // ---------------------------------------------------------------------------
 
   handleMicrostepEditHold();
+
+  // ---------------------------------------------------------------------------
+  // Note-mode exit gesture: hold the play/pause pad (98) -> leave note mode
+  // ---------------------------------------------------------------------------
+
+  handleLaunchpadNoteModeExitHold();
 
   // ---------------------------------------------------------------------------
   // Substep playback: fire slots 1..7 for lanes using the substep grid
