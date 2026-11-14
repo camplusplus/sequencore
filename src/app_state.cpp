@@ -126,6 +126,10 @@ uint16_t g_tempoBpm = 120;
 uint8_t g_channelSwing[kMidiChannelCount] = {0};
 uint8_t g_lastPressedChannel = 0;
 
+// Start in play-only mode: the boot-time autoload plays without capturing,
+// and the top-row play/pause pad (98) lights white to show it.
+bool g_playOnlyMode = true;
+
 volatile bool g_running = true;
 // Set when the user explicitly stopped the transport with the top-row
 // play/stop pad (98). Releasing a record-channel button must not silently
@@ -154,20 +158,24 @@ byte g_launchpadRecordVelocity = 100;
 
 uint8_t g_launchpadRecordStep = 0;
 
-// True while a stopped-transport note-mode touch has an open echo session:
-// the pads are sounded on the DIN outputs so the player can hear what they
-// record over a paused transport. START opens the session once, STOP closes
-// it when note mode is left.
+uint32_t g_noteModeClockMs = 0;
+bool g_noteModeClockArmed = false;
+
+// True while a note-mode touch has an open echo session: the pads are
+// sounded on the DIN outputs in every transport mode, so the player always
+// hears what they touch. START opens the session only over a pause, because
+// a running transport already sent one, and pausing mid-note-mode closes it
+// so the next touch re-opens it with a fresh START.
 bool g_launchpadEchoOpen = false;
 
-// Pitch of the last pad touched while paused that has not been released yet
-// (0 = none). Leaving note mode while a pad is still held down releases it
-// so the instrument never keeps a stuck key.
+// Pitch of the last pad touched in note mode that has not been released yet
+// (0 = none). Leaving note mode or pausing while a pad is still held down
+// releases it so the instrument never keeps a stuck key.
 byte g_launchpadEchoNote = 0;
 
-// Lane-wide aftertouch pressure a paused note-mode touch left on the
-// outputs (0 = none). Cleared when the pad is released or note mode is
-// left, so the instrument never keeps stale pressure.
+// Lane-wide aftertouch pressure a note-mode touch left on the outputs
+// (0 = none). Cleared when the pad is released or note mode is left, so
+// the instrument never keeps stale pressure.
 byte g_launchpadEchoPressure = 0;
 
 // -----------------------------------------------------------------------------

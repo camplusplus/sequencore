@@ -193,6 +193,11 @@ extern uint8_t g_lastPressedChannel;
 
 // Read from the MIDI clock ISR as well as the main loop.
 extern volatile bool g_running;
+// Together with g_running this encodes the three transport modes the top-row
+// play/pause pad (98) cycles through: running + play-only = play only (the
+// sequence sounds but nothing is captured), running + !play-only = record,
+// !running = paused.
+extern bool g_playOnlyMode;
 // True when the user stopped the transport on purpose (top-row play/stop
 // pad). Suppresses the "start playing after recording" convenience so a
 // deliberate pause survives into Launchpad note mode.
@@ -264,20 +269,30 @@ extern bool g_launchpadNoteMode;
 extern byte g_launchpadRecordVelocity;
 
 // Write cursor for launchpad-only recording: the step the next tapped pad
-// lands on. Advances modulo g_sequenceLength after each recorded note.
+// lands on. It is advanced by elapsed time, not by touch count (see the
+// clock below), so pads touched a beat apart land a beat apart and the
+// steps in between stay empty.
 extern uint8_t g_launchpadRecordStep;
 
-// True while a paused note-mode touch has an open echo session: recorded
-// pads are also sounded live on the DIN outputs (opened with START, closed
-// with STOP on leaving note mode) so recording is audible without playback.
+// Wall-clock anchor for that cursor: the cursor advances by whole step
+// durations since this timestamp, which is what keeps the real timing
+// between pad touches while the transport stays stopped. Armed on the
+// first recorded note so the sequence always starts at step 0.
+extern uint32_t g_noteModeClockMs;
+extern bool g_noteModeClockArmed;
+
+// True while a note-mode touch has an open echo session: pads touched in
+// note mode are also sounded live on the DIN outputs in every transport
+// mode (START opens the session only over a pause, because a running
+// transport already sent one).
 extern bool g_launchpadEchoOpen;
 
-// Pitch of the last paused note-mode touch that is still sounding on the
-// outputs (0 = none), so leaving note mode mid-hold can release it.
+// Pitch of the last note-mode touch that is still sounding on the outputs
+// (0 = none), so leaving note mode or pausing mid-hold can release it.
 extern byte g_launchpadEchoNote;
 
 // Lane-wide (monophonic) aftertouch pressure currently in effect from a
-// paused note-mode touch (0 = none). Pad velocity is reused as pressure, so
+// note-mode touch (0 = none). Pad velocity is reused as pressure, so
 // the release has to answer it exactly like the NoteOff answers the NoteOn.
 extern byte g_launchpadEchoPressure;
 

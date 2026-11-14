@@ -209,6 +209,11 @@ void enterLaunchpadNoteMode()
   g_launchpadNoteMode = true;
   g_launchpadRecordStep = 0;
 
+  // The write cursor runs on wall time; the first recorded note arms the
+  // clock so that note lands on step 0 and later timing is relative to it.
+  g_noteModeClockMs = 0;
+  g_noteModeClockArmed = false;
+
   // Note mode is no longer a modifier state, so the cycle colours stay off
   // while it runs; leaving note mode lands on 0 the same way.
   g_modifierMode = 0;
@@ -226,6 +231,57 @@ void enterLaunchpadNoteMode()
   resetLaunchpadLedCache();
 }
 
+// -----------------------------------------------------------------------------
+// Note-mode live echo
+// -----------------------------------------------------------------------------
+
+// Note mode sounds every pad touch live on the recording lane in all three
+// transport modes, so a touch always answers on the instrument: while paused
+// the echo is the only thing that can sound a cell, and while the transport
+// runs the pads still answer immediately even though the sequencer is playing
+// back the grid. g_launchpadEchoOpen marks the session the first touch opens
+// (a START is needed only after a pause, because a running transport already
+// sent one), and the matching release comes from onLaunchpadNoteOff.
+void closeLaunchpadEchoSession()
+{
+  if (!g_launchpadEchoOpen)
+  {
+    return;
+  }
+
+  // The exit fires while a pad may still be held down, so no release is
+  // coming through onLaunchpadNoteOff for whatever is still sounding -
+  // release it here so the instrument has no stuck key.
+  if (g_launchpadEchoNote != 0)
+  {
+    const uint8_t laneChannel =
+        (uint8_t)((g_recordingChannelOffset + g_channelOffset) %
+                  kMidiChannelCount);
+
+    midiOutSendNoteOff(
+        g_launchpadEchoNote,
+        0,
+        (byte)(laneChannel + 1));
+
+    // Same for the pressure the touch left behind.
+    midiOutSendPolyAfterTouch(
+        g_launchpadEchoNote,
+        0,
+        (byte)(laneChannel + 1));
+
+    if (g_launchpadEchoPressure != 0)
+    {
+      midiOutSendAfterTouch(
+          0,
+          (byte)(laneChannel + 1));
+    }
+  }
+
+  g_launchpadEchoNote = 0;
+  g_launchpadEchoPressure = 0;
+  g_launchpadEchoOpen = false;
+}
+
 void exitLaunchpadNoteMode()
 {
   g_launchpadNoteMode = false;
@@ -234,51 +290,18 @@ void exitLaunchpadNoteMode()
   // gesture that leaves it is the held play/pause pad (98).
   g_modifierMode = 0;
   g_launchpadRecordStep = 0;
+  g_noteModeClockMs = 0;
+  g_noteModeClockArmed = false;
 
-  // Leaving note mode closes a paused echo session: the pads sounded live
-  // over a stopped transport, so put the outputs back into the stopped
-  // state the pause established instead of leaving a dangling START.
-  if (g_launchpadEchoOpen)
+  // Leaving note mode closes the live echo session: release whatever the
+  // pads left sounding. Only a stopped transport needs the STOP back, since
+  // that is the state the pause established; while the transport runs the
+  // echo rode on its already-open session and the transport keeps going.
+  closeLaunchpadEchoSession();
+
+  if (!g_running)
   {
-    // The exit fires while the play/pause pad is still held down, so a grid
-    // pad that was left held has no release coming to the note-mode echo
-    // path - release whatever is still sounding so the instrument has no
-    // stuck key.
-    if (g_launchpadEchoNote != 0)
-    {
-      const uint8_t laneChannel =
-          (uint8_t)((g_recordingChannelOffset + g_channelOffset) %
-                    kMidiChannelCount);
-
-      midiOutSendNoteOff(
-          g_launchpadEchoNote,
-          0,
-          (byte)(laneChannel + 1));
-
-      // Same for the pressure the touch left behind.
-      midiOutSendPolyAfterTouch(
-          g_launchpadEchoNote,
-          0,
-          (byte)(laneChannel + 1));
-
-      if (g_launchpadEchoPressure != 0)
-      {
-        midiOutSendAfterTouch(
-            0,
-            (byte)(laneChannel + 1));
-
-        g_launchpadEchoPressure = 0;
-      }
-
-      g_launchpadEchoNote = 0;
-    }
-
-    if (!g_running)
-    {
-      midiOutSendStop();
-    }
-
-    g_launchpadEchoOpen = false;
+    midiOutSendStop();
   }
 
   sendLaunchpadProgramMode();
@@ -578,15 +601,17 @@ void refreshLaunchpadControlLedState()
                                       ? kLaunchpadColorBlueLow
                                       : kLaunchpadColorOff)))));
 
-  // Run/stop. A held play/pause pad is the enter/leave-note-mode gesture, so
-  // amber means "this hold is being counted" instead of the run/pause color.
+  // Play/pause pad (98): amber while a hold is being counted (the note-mode
+  // gesture), otherwise the three transport modes - off when paused, white
+  // when playing without recording, red while recording.
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 7,
       g_noteModeHoldActive
           ? kLaunchpadColorAmberHigh
-          : (g_running
-                 ? kLaunchpadColorWhiteHigh
-                 : kLaunchpadColorRedHigh));
+          : (!g_running
+                 ? kLaunchpadColorOff
+                 : (g_playOnlyMode ? kLaunchpadColorWhiteHigh
+                                   : kLaunchpadColorRedHigh)));
 
   // Right column: channel control pads.
   //   green  = muted
@@ -634,11 +659,70 @@ void refreshLaunchpadControlLedState()
 // Launchpad-only recording (note mode)
 // -----------------------------------------------------------------------------
 
+// Sound a note-mode touch live on the lane it was recorded to. This runs in
+// all three transport modes, so a pad always answers on the instrument: over
+// a pause the echo is the only thing that can sound the cell, and while the
+// transport runs the pads still answer immediately even though the sequencer
+// is playing back the grid. START opens the session only over a pause,
+// because a running transport already sent one (and pausing mid-note-mode
+// closes the session, so the next touch re-opens it with a fresh START).
+// The matching release comes from onLaunchpadNoteOff.
+void launchpadEchoLiveNote(
+    byte note,
+    byte resolvedVelocity)
+{
+  const uint8_t laneChannel =
+      (uint8_t)((g_recordingChannelOffset + g_channelOffset) %
+                kMidiChannelCount);
+
+  if (!g_launchpadEchoOpen)
+  {
+    if (!g_running)
+    {
+      midiOutSendStart();
+    }
+
+    g_launchpadEchoOpen = true;
+  }
+
+  midiOutSendNoteOn(
+      note,
+      resolvedVelocity,
+      (byte)(laneChannel + 1));
+
+  // The X gives no pressure of its own, so reuse the pad's velocity as
+  // aftertouch on the lane just sounded: poly for the pitch that was
+  // touched (instruments with per-note pressure) and lane-wide for
+  // instruments that only have one pressure per channel. Both are
+  // answered by the release in onLaunchpadNoteOff.
+  midiOutSendPolyAfterTouch(
+      note,
+      resolvedVelocity,
+      (byte)(laneChannel + 1));
+
+  midiOutSendAfterTouch(
+      resolvedVelocity,
+      (byte)(laneChannel + 1));
+
+  g_launchpadEchoPressure = resolvedVelocity;
+  g_launchpadEchoNote = note;
+}
+
 // In note mode the grid pads supply the pitch themselves, so a pad touch
 // arrives as a real NoteOn carrying a MIDI pitch instead of the 11-98 pad
 // address that Programmer Mode sends as a Control Change. Record that pitch
 // at the launchpad write cursor so a sequence can be built without a
-// hardware MIDI keyboard.
+// hardware MIDI keyboard. Only the record and paused modes reach this: play
+// only (white) never writes to the grid, so onLaunchpadNoteOn skips it and
+// only echoes the touch live.
+//
+// The cursor is time-based, not touch-count-based: touches keep their real
+// spacing whatever the transport is doing, so the clock that decides which
+// step a touch lands on is wall time. The cursor advances by whole step
+// durations since the last touch, which keeps the real timing between
+// since the last touch, which keeps the real timing between touches and
+// leaves the skipped steps empty. Pads touched within the same step
+// duration stack as a chord on the base note already in that lane.
 //
 // The lane is the recording channel picked with the right-column buttons
 // before entering note mode (shifted by the scroll offset) - the same lane
@@ -656,6 +740,41 @@ void recordLaunchpadNotePitch(
   const uint8_t laneChannel =
       (uint8_t)((g_recordingChannelOffset + g_channelOffset) % kMidiChannelCount);
 
+  // Advance the write cursor by whole step durations since the last
+  // recorded touch: a pad touched two steps later lands two steps along
+  // and the step in between stays empty, which is what keeps the real
+  // timing of a launchpad-only performance. Stepping the anchor by +=
+  // stepMs instead of re-reading millis() keeps the phase of the step
+  // grid, so tempo changes mid-recording are respected too. The first
+  // touch only arms the clock, so the sequence always starts at step 0.
+  bool cursorMoved = false;
+
+  if (!g_noteModeClockArmed)
+  {
+    g_noteModeClockMs = millis();
+    g_noteModeClockArmed = true;
+  }
+  else
+  {
+    const uint16_t stepMs =
+        calculateStepDurationMs() != 0
+            ? calculateStepDurationMs()
+            : 1;
+
+    while ((uint32_t)(millis() - g_noteModeClockMs) >= stepMs)
+    {
+      g_noteModeClockMs += stepMs;
+
+      ++g_launchpadRecordStep;
+      if (g_launchpadRecordStep >= g_sequenceLength)
+      {
+        g_launchpadRecordStep = 0;
+      }
+
+      cursorMoved = true;
+    }
+  }
+
   if (g_launchpadRecordStep >= g_sequenceLength)
   {
     g_launchpadRecordStep = 0;
@@ -671,64 +790,74 @@ void recordLaunchpadNotePitch(
           ? velocity
           : g_launchpadRecordVelocity;
 
-  lane.substep[0].active = true;
-  lane.substep[0].note = note;
-  lane.substep[0].velocity = resolvedVelocity;
-
-  // A recorded cell replaces anything else that was in this step/lane.
-  for (uint8_t k = 1; k < kMicrostepMax; ++k)
+  // Pads touched within one step duration share a step: the first one
+  // lays down the base note in substep[0], later ones become chord tones
+  // through the existing chordActiveMask model (chordNote[slot] is the
+  // semitone offset slot + 1 above the base). A lower touch re-bases so
+  // chords work in any touch order; a touch after the cursor moved starts
+  // a fresh cell and replaces anything that was in that step/lane.
+  if (!cursorMoved && lane.substep[0].active &&
+      lane.substep[0].note != note)
   {
-    lane.substep[k].active = false;
-  }
+    const byte baseNote = lane.substep[0].note;
 
-  lane.chordActiveMask = 0;
-  lane.muted = false;
-
-  // Overdub feedback: with the transport stopped nothing else would sound
-  // the cell just written, so play it immediately on the lane it was
-  // recorded to. START opens the echo session once because pausing already
-  // sent STOP (and instruments ignore notes after that); the matching
-  // release comes from onLaunchpadNoteOff. While the sequencer runs it plays
-  // the cell itself, so the echo is skipped to avoid doubling every note.
-  if (!g_running)
-  {
-    if (!g_launchpadEchoOpen)
+    if (note > baseNote)
     {
-      midiOutSendStart();
-      g_launchpadEchoOpen = true;
+      const uint8_t slot = (uint8_t)(note - baseNote) - 1;
+
+      if (slot < kChordNoteMax)
+      {
+        lane.chordActiveMask |= (1UL << slot);
+        lane.chordNote[slot] = note;
+        lane.chordVelocity[slot] = resolvedVelocity;
+      }
+    }
+    else
+    {
+      const uint8_t slot = (uint8_t)(baseNote - note) - 1;
+
+      const byte baseVelocity = lane.substep[0].velocity;
+
+      lane.substep[0].note = note;
+      lane.substep[0].velocity = resolvedVelocity;
+
+      if (slot < kChordNoteMax)
+      {
+        lane.chordActiveMask |= (1UL << slot);
+        lane.chordNote[slot] = baseNote;
+        lane.chordVelocity[slot] = baseVelocity;
+      }
     }
 
-    midiOutSendNoteOn(
-        note,
-        resolvedVelocity,
-        (byte)(laneChannel + 1));
-
-    // The X gives no pressure of its own, so reuse the pad's velocity as
-    // aftertouch on the lane just sounded: poly for the pitch that was
-    // touched (instruments with per-note pressure) and lane-wide for
-    // instruments that only have one pressure per channel. Both are
-    // answered by the release in onLaunchpadNoteOff.
-    midiOutSendPolyAfterTouch(
-        note,
-        resolvedVelocity,
-        (byte)(laneChannel + 1));
-
-    midiOutSendAfterTouch(
-        resolvedVelocity,
-        (byte)(laneChannel + 1));
-
-    g_launchpadEchoPressure = resolvedVelocity;
-    g_launchpadEchoNote = note;
+    lane.muted = false;
   }
-
-  // Advance the write cursor so the next tapped pad lands on the next step.
-  ++g_launchpadRecordStep;
-  if (g_launchpadRecordStep >= g_sequenceLength)
+  else if (!cursorMoved && lane.substep[0].active)
   {
-    g_launchpadRecordStep = 0;
+    // Same pitch re-touched inside the step: just refresh the velocity.
+    lane.substep[0].velocity = resolvedVelocity;
+    lane.muted = false;
+  }
+  else
+  {
+    // Fresh cell: replace anything else that was in this step/lane.
+    lane.substep[0].active = true;
+    lane.substep[0].note = note;
+    lane.substep[0].velocity = resolvedVelocity;
+
+    for (uint8_t k = 1; k < kMicrostepMax; ++k)
+    {
+      lane.substep[k].active = false;
+    }
+
+    lane.chordActiveMask = 0;
+    lane.muted = false;
   }
 
-  refreshLaunchpadGridLedState();
+  // The cursor is not advanced here: elapsed time advances it (see the top
+  // of the function), so several pads touched within one step duration
+  // land on the same step instead of a run of consecutive steps. Sounding
+  // the touch live is not done here either - onLaunchpadNoteOn echoes it in
+  // every transport mode, including play-only where nothing was written.
 }
 
 void stageLaunchpadPad(
@@ -1210,13 +1339,45 @@ void handleLaunchpadControl(byte note)
     // ---------------------------------------------------------------------------
 
   case kLaunchpadTopRowControlNoteMin + 7:
-    g_running = !g_running;
-    // Remember an explicit stop so releasing a record-channel button
-    // cannot silently restart the transport afterwards.
-    g_userPaused = !g_running;
-
-    if (g_running)
+    // Tapping this pad cycles three transport modes: play only (running,
+    // nothing recorded), record (running, capturing) and paused. Holding it
+    // is the note-mode gesture, handled before we get here.
+    if (g_running && g_playOnlyMode)
     {
+      // Play only -> record.
+      g_playOnlyMode = false;
+    } 
+    else if (g_running)
+    {
+      // Record -> pause.
+      g_running = false;
+      // Remember an explicit stop so releasing a record-channel button
+      // cannot silently restart the transport afterwards.
+      g_userPaused = true;
+
+      // Stop the MIDI transport; the pad goes dark to show the pause. Clear
+      // anything still sounding first: the note-off for the step that just
+      // played is normally sent at the next step boundary, and that boundary
+      // never arrives while paused, so the last note would otherwise keep
+      // ringing (and re-articulate on resume). A note-mode echo that was
+      // riding the running transport closes here too, so the next touch
+      // over the pause re-opens it with a fresh START.
+      releaseSoundingNotes();
+      closeLaunchpadEchoSession();
+      midiOutSendStop();
+    } 
+    else
+    {
+      // Pause -> play only.
+      g_running = true;
+      g_playOnlyMode = true;
+      g_userPaused = false;
+
+      // No recording arm survives a pause; lane pads pressed in play-only
+      // mode keep their lane selection without arming capture.
+      g_recordingHeldNote = false;
+      g_recording = false;
+
       // Restart from the first step and reset timer phases so playback begins
       // cleanly at the start of the sequence.
       g_stepIndex = 0;
@@ -1227,16 +1388,6 @@ void handleLaunchpadControl(byte note)
 
       midiOutSendStart();
       advanceSequencerStep();  // Start the first step immediately.
-    } 
-    else
-    {
-      // Stop the MIDI transport; pressing again starts from step zero.
-      // Clear anything still sounding first: the note-off for the step that
-      // just played is normally sent at the next step boundary, and that
-      // boundary never arrives while paused, so the last note would
-      // otherwise keep ringing (and re-articulate on resume).
-      releaseSoundingNotes();
-      midiOutSendStop();
     }
     break;
 
@@ -1270,16 +1421,36 @@ void onLaunchpadNoteOn(
       return;
     }
 
-    // Nothing else is intercepted here: Novation's own Live-Mode firmware
-    // already gives the top-row pads their transport/tempo/scroll behaviour,
-    // so every other NoteOn is a pitch to record. The lane comes from the
-    // right-column record buttons selected before entering note mode, not
-    // from the Launchpad's own note channel (Live Mode reports its pads on
-    // channel 2, which would shift everything one lane over).
-    recordLaunchpadNotePitch(
-        channel,
+    // Play-only (white) mode protects the sequence: the touch is not written
+    // into the grid, but it still sounds live below, exactly as it does in
+    // record and paused mode.
+    if (!g_playOnlyMode)
+    {
+      // Nothing else is intercepted here: Novation's own Live-Mode firmware
+      // already gives the top-row pads their transport/tempo/scroll behaviour,
+      // so every other NoteOn is a pitch to record. The lane comes from the
+      // right-column record buttons selected before entering note mode, not
+      // from the Launchpad's own note channel (Live Mode reports its pads on
+      // channel 2, which would shift everything one lane over).
+      recordLaunchpadNotePitch(
+          channel,
+          note,
+          velocity);
+    }
+
+    // Sound the touch live in every transport mode. The velocity fallback
+    // matches the one the grid write used, so the echo and the recorded cell
+    // agree on how hard the pad was hit.
+    const byte resolvedVelocity =
+        velocity != 0
+            ? velocity
+            : g_launchpadRecordVelocity;
+
+    launchpadEchoLiveNote(
         note,
-        velocity);
+        resolvedVelocity);
+
+    refreshLaunchpadGridLedState();
     return;
   }
 
@@ -1301,10 +1472,10 @@ void onLaunchpadNoteOff(
   // is done after leaving note mode, in red (delete) modifier mode.
   if (g_launchpadNoteMode)
   {
-    // The touch echoed the pitch live when the transport was stopped, so the
+    // The touch echoed the pitch live in every transport mode, so the
     // release has to answer it on the same lane - otherwise the instrument
     // keeps the key held down until the next note on that pitch arrives.
-    if (!g_running && note != kLaunchpadNoteModeIgnoredNote)
+    if (g_launchpadEchoOpen && note != kLaunchpadNoteModeIgnoredNote)
     {
       const uint8_t laneChannel =
           (uint8_t)((g_recordingChannelOffset + g_channelOffset) %
@@ -1511,9 +1682,14 @@ void onLaunchpadControlChange(
       g_recordingChannelOffset =
           channelNumber - 1;
 
-      // Holding this button means RECORD.
-      g_recordingHeldNote = true;
-      g_recording = true;
+      // Pressing a lane pad selects the lane in every mode, but it only arms
+      // recording when the transport is in record mode; in play-only mode the
+      // lane pads stay lane selectors without capturing anything.
+      if (!g_playOnlyMode)
+      {
+        g_recordingHeldNote = true;
+        g_recording = true;
+      }
 
       refreshLaunchpadControlLedState();
       return;
@@ -1553,12 +1729,13 @@ void onLaunchpadControlChange(
   if (isLaunchpadTopRowControlNote(control))
   {
     // -----------------------------------------------------------------------
-    // PLAY/PAUSE PAD (98): tap = play/pause, hold = enter / leave note mode
+    // PLAY/PAUSE PAD (98): tap cycles play-only / record / pause, hold =
+    // enter / leave note mode
     //   A press only starts the hold clock; handleLaunchpadNoteModeHold()
     //   switches note mode once the pad has been held past the window for the
     //   mode we are in (kNoteModeEnterHoldMs outside note mode,
     //   kNoteModeExitHoldMs inside it). Releasing before that keeps the
-    //   pad's normal meaning, so a quick tap still toggles the transport -
+    //   pad's normal meaning, so a quick tap still cycles the transport -
     //   resolved on release rather than on press, which is what lets the
     //   three meanings share one pad.
     // -----------------------------------------------------------------------

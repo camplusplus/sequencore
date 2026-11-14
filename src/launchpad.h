@@ -55,7 +55,8 @@ void handleLaunchpadControl(byte note);
 void handleMicrostepEditHold();
 
 // -----------------------------------------------------------------------------
-// Note-mode gesture (hold the play/pause pad to enter / leave note mode)
+// Note-mode gesture (hold the play/pause pad to enter / leave note mode;
+// tapping it cycles play-only / record / pause)
 // -----------------------------------------------------------------------------
 
 // Called every loop: a play/pause pad (98) that was pressed starts a clock.
