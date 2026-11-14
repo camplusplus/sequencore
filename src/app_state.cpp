@@ -108,6 +108,11 @@ uint8_t g_channelSwing[kMidiChannelCount] = {0};
 uint8_t g_lastPressedChannel = 0;
 
 volatile bool g_running = true;
+// Set when the user explicitly stopped the transport with the top-row
+// play/stop pad (98). Releasing a record-channel button must not silently
+// restart the sequencer while this is set - e.g. when the user pauses first
+// and then records in Launchpad note mode.
+bool g_userPaused = false;
 bool g_recording = false;
 bool g_overdub = false;
 
@@ -129,6 +134,17 @@ bool g_launchpadNoteMode = false;
 byte g_launchpadRecordVelocity = 100;
 
 uint8_t g_launchpadRecordStep = 0;
+
+// True while a stopped-transport note-mode touch has an open echo session:
+// the pads are sounded on the DIN outputs so the player can hear what they
+// record over a paused transport. START opens the session once, STOP closes
+// it when note mode is left.
+bool g_launchpadEchoOpen = false;
+
+// Pitch of the last pad touched while paused that has not been released yet
+// (0 = none). Leaving note mode while a pad is still held down releases it
+// so the instrument never keeps a stuck key.
+byte g_launchpadEchoNote = 0;
 
 // -----------------------------------------------------------------------------
 // Timers

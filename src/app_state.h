@@ -188,6 +188,10 @@ extern uint8_t g_lastPressedChannel;
 
 // Read from the MIDI clock ISR as well as the main loop.
 extern volatile bool g_running;
+// True when the user stopped the transport on purpose (top-row play/stop
+// pad). Suppresses the "start playing after recording" convenience so a
+// deliberate pause survives into Launchpad note mode.
+extern bool g_userPaused;
 extern bool g_recording;
 extern bool g_overdub;
 
@@ -235,7 +239,11 @@ extern byte g_controlFlashNote;
 // 5 = white (Launchpad native Live/Note Mode: the grid pads supply the pitch
 //             themselves, so notes can be recorded without a hardware MIDI
 //             keyboard. Select the lane first with the right-column record
-//             buttons; recording is automatic once in note mode.
+//             buttons; recording is automatic once in note mode. Stopping
+//             the transport with the top-row play/stop pad (98) first keeps
+//             it paused: pads still record and sound live on the selected
+//             lane, but the sequence itself only plays back once that pad
+//             is pressed again.
 //             Entering this mode sends the Launchpad X SysEx
 //             sequence 0E 00 / 00 01 / 15 01; wrapping back to 0 restores
 //             Programmer Mode with 0E 01. Because pad 97 stops reporting in
@@ -261,6 +269,15 @@ extern byte g_launchpadRecordVelocity;
 // Write cursor for launchpad-only recording: the step the next tapped pad
 // lands on. Advances modulo g_sequenceLength after each recorded note.
 extern uint8_t g_launchpadRecordStep;
+
+// True while a paused note-mode touch has an open echo session: recorded
+// pads are also sounded live on the DIN outputs (opened with START, closed
+// with STOP on leaving note mode) so recording is audible without playback.
+extern bool g_launchpadEchoOpen;
+
+// Pitch of the last paused note-mode touch that is still sounding on the
+// outputs (0 = none), so leaving note mode mid-hold can release it.
+extern byte g_launchpadEchoNote;
 
 // Bit N set = channel N is muted (green modifier mode).
 extern uint32_t g_channelMuteMask;

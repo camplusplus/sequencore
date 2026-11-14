@@ -227,6 +227,36 @@ void exitLaunchpadNoteMode()
   g_modifierMode = 0;
   g_launchpadRecordStep = 0;
 
+  // Leaving note mode closes a paused echo session: the pads sounded live
+  // over a stopped transport, so put the outputs back into the stopped
+  // state the pause established instead of leaving a dangling START.
+  if (g_launchpadEchoOpen)
+  {
+    // The escape pad can be pressed while a grid pad is still held down, in
+    // which case its release never reaches the note-mode echo path - release
+    // whatever is still sounding so the instrument has no stuck key.
+    if (g_launchpadEchoNote != 0)
+    {
+      const uint8_t laneChannel =
+          (uint8_t)((g_recordingChannelOffset + g_channelOffset) %
+                    kMidiChannelCount);
+
+      midiOutSendNoteOff(
+          g_launchpadEchoNote,
+          0,
+          (byte)(laneChannel + 1));
+
+      g_launchpadEchoNote = 0;
+    }
+
+    if (!g_running)
+    {
+      midiOutSendStop();
+    }
+
+    g_launchpadEchoOpen = false;
+  }
+
   sendLaunchpadProgramMode();
 }
 
@@ -630,6 +660,28 @@ void recordLaunchpadNotePitch(
 
   lane.chordActiveMask = 0;
   lane.muted = false;
+
+  // Overdub feedback: with the transport stopped nothing else would sound
+  // the cell just written, so play it immediately on the lane it was
+  // recorded to. START opens the echo session once because pausing already
+  // sent STOP (and instruments ignore notes after that); the matching
+  // release comes from onLaunchpadNoteOff. While the sequencer runs it plays
+  // the cell itself, so the echo is skipped to avoid doubling every note.
+  if (!g_running)
+  {
+    if (!g_launchpadEchoOpen)
+    {
+      midiOutSendStart();
+      g_launchpadEchoOpen = true;
+    }
+
+    midiOutSendNoteOn(
+        note,
+        resolvedVelocity,
+        (byte)(laneChannel + 1));
+
+    g_launchpadEchoNote = note;
+  }
 
   // Advance the write cursor so the next tapped pad lands on the next step.
   ++g_launchpadRecordStep;
@@ -1081,6 +1133,9 @@ void handleLaunchpadControl(byte note)
 
   case kLaunchpadTopRowControlNoteMin + 7:
     g_running = !g_running;
+    // Remember an explicit stop so releasing a record-channel button
+    // cannot silently restart the transport afterwards.
+    g_userPaused = !g_running;
 
     if (g_running)
     {
@@ -1164,6 +1219,23 @@ void onLaunchpadNoteOff(
   // is done after leaving note mode, in red (delete) modifier mode.
   if (g_launchpadNoteMode)
   {
+    // The touch echoed the pitch live when the transport was stopped, so the
+    // release has to answer it on the same lane - otherwise the instrument
+    // keeps the key held down until the next note on that pitch arrives.
+    if (!g_running && note != kLaunchpadNoteModeExitNote)
+    {
+      const uint8_t laneChannel =
+          (uint8_t)((g_recordingChannelOffset + g_channelOffset) %
+                    kMidiChannelCount);
+
+      midiOutSendNoteOff(
+          note,
+          velocity,
+          (byte)(laneChannel + 1));
+
+      g_launchpadEchoNote = 0;
+    }
+
     return;
   }
 
@@ -1302,8 +1374,10 @@ void onLaunchpadControlChange(
       g_recordingHeldNote = false;
       g_recording = false;
 
-      // Make sure sequencer is running after recording.
-      if (!g_running)
+      // Make sure sequencer is running after recording, but never over an
+      // explicit stop: pausing with the top-row play/stop pad first lets
+      // Launchpad note mode record pitches while the transport stays put.
+      if (!g_running && !g_userPaused)
       {
         g_running = true;
         g_stepTimer = 0;
