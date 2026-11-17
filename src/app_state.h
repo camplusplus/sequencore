@@ -217,6 +217,24 @@ extern byte g_lastHwVelocity;
 extern uint8_t g_hwNotesHeld;
 
 // -----------------------------------------------------------------------------
+// MIDI clock source
+// -----------------------------------------------------------------------------
+
+// True once a MIDI clock (F8) has been observed arriving from the DIN MIDI
+// IN: the incoming stream then becomes the clock source - the received
+// pulses are forwarded to the outputs and the sequencer advances from them
+// instead of the Teensy's own PIT timer pulses. Read by the clock ISR, so
+// volatile like g_running.
+extern volatile bool g_midiInClockActive;
+
+// Received clock pulses counted within the current step; the step advances
+// every kMidiInClockPulsesPerStep pulses.
+extern uint8_t g_midiInClockPulseCount;
+
+// Pulses per step at 24ppqn: 24 per quarter note = 6 per 16th-note step.
+constexpr uint8_t kMidiInClockPulsesPerStep = 6;
+
+// -----------------------------------------------------------------------------
 // Timers
 // -----------------------------------------------------------------------------
 

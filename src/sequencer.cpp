@@ -2,6 +2,7 @@
 
 #include "app_state.h"
 #include "launchpad.h"
+#include "sd_store.h"
 
 namespace
 {
@@ -123,6 +124,14 @@ void sendMidiMessage(
 void sendStepClockPulse()
 {
   if (!g_running)
+  {
+    return;
+  }
+
+  // When a clock arrives from MIDI IN, that stream is the source: its pulses
+  // are forwarded on arrival (see handleHardwareMidiIn), so do not emit a
+  // second, competing pulse from the PIT timer.
+  if (g_midiInClockActive)
   {
     return;
   }
@@ -624,6 +633,43 @@ void handleHardwareMidiIn()
     {
       --g_hwNotesHeld;
     }
+
+    return;
+  }
+
+  // ---------------------------------------------------------------------------
+  // MIDI CLOCK (F8) arriving from the DIN input
+  // ---------------------------------------------------------------------------
+
+  if (type == midi::Clock)
+  {
+    // The incoming stream is the clock source: the Teensy stops emitting
+    // its own PIT pulses (see sendStepClockPulse) and the sequencer
+    // advances from the pulses that arrive here instead.
+    g_midiInClockActive = true;
+
+    // Forward and count only while the transport runs, mirroring the
+    // PIT clock's behavior over a pause.
+    if (!g_running)
+    {
+      return;
+    }
+
+    midiOutSendClock();
+
+    // 24ppqn: six pulses per step (a 16th note).
+    if (++g_midiInClockPulseCount < kMidiInClockPulsesPerStep)
+    {
+      return;
+    }
+
+    g_midiInClockPulseCount = 0;
+
+    // The same step advance the main loop performs on its own timer.
+    g_stepTimer = 0;
+    advanceSequencerStep();
+    sdStorePlayAutoTracks();
+    refreshLaunchpadGridLedState();
 
     return;
   }

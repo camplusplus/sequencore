@@ -147,6 +147,14 @@ byte g_lastHwVelocity = 0;
 uint8_t g_hwNotesHeld = 0;
 
 // -----------------------------------------------------------------------------
+// MIDI clock source
+// -----------------------------------------------------------------------------
+
+// No incoming clock observed yet: the Teensy's own PIT timer is the source.
+volatile bool g_midiInClockActive = false;
+uint8_t g_midiInClockPulseCount = 0;
+
+// -----------------------------------------------------------------------------
 // Launchpad note mode (entered by holding the play/pause pad)
 // -----------------------------------------------------------------------------
 
