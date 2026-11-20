@@ -219,13 +219,9 @@ void enterLaunchpadNoteMode()
   // while it runs; leaving note mode lands on 0 the same way.
   g_modifierMode = 0;
 
-  // The gesture (long-press a right-column button) always starts from a
-  // clean slate, and the button's lane must not keep a grid-pad hardware
-  // recording armed once the button is released.
-  g_recHoldActive = false;
-  g_recHoldTriggered = false;
-  g_recHoldNote = 0;
-  g_recordingHeldNote = false;
+  // The gesture (hold the play/pause pad) always starts from a clean slate.
+  g_noteModeHoldActive = false;
+  g_noteModeHoldTriggered = false;
 
   sendLaunchpadLiveMode();
   sendLaunchpadNoteLayout();
@@ -298,11 +294,6 @@ void exitLaunchpadNoteMode()
   g_noteModeClockMs = 0;
   g_noteModeClockArmed = false;
 
-  // The lane must not keep a grid-pad hardware recording armed once the
-  // button is released. The fired exit gesture itself stays recorded in
-  // g_recHoldTriggered/g_recHoldNote so the release of the held pad 98
-  // does not also flip the transport.
-
   // Leaving note mode closes the live echo session: release whatever the
   // pads left sounding. Only a stopped transport needs the STOP back, since
   // that is the state the pause established; while the transport runs the
@@ -323,11 +314,9 @@ void exitLaunchpadNoteMode()
 // never arrive as NoteOn here.
 static void cycleLaunchpadModifierMode()
 {
-  // Note mode is not part of the cycle any more - it is entered by
-  // long-pressing a right-column record function button and left by
-  // long-pressing the play/pause pad (98), and pad 97 stops reporting in
-  // Live Mode anyway - so the cycle only ever walks the four modifier
-  // colours.
+  // Note mode is not part of the cycle any more - it is entered and left by
+  // holding the play/pause pad (98), and pad 97 stops reporting in Live Mode
+  // anyway - so the cycle only ever walks the four modifier colours.
   g_modifierMode = (g_modifierMode + 1) % 5;
 }
 
@@ -613,12 +602,12 @@ void refreshLaunchpadControlLedState()
                                       ? kLaunchpadColorBlueLow
                                       : kLaunchpadColorOff)))));
 
-  // Play/pause pad (98): amber while the exit clock counts inside note mode,
-  // otherwise the three transport modes - off when paused, white when
-  // playing without recording, red while recording.
+  // Play/pause pad (98): amber while a hold is being counted (the note-mode
+  // gesture), otherwise the three transport modes - off when paused, white
+  // when playing without recording, red while recording.
   setLaunchpadLedColor(
       kLaunchpadTopRowControlNoteMin + 7,
-      g_recHoldActive && g_recHoldNote == kLaunchpadTopRowControlNoteMin + 7
+      g_noteModeHoldActive
           ? kLaunchpadColorAmberHigh
           : (!g_running
                  ? kLaunchpadColorOff
@@ -646,12 +635,7 @@ void refreshLaunchpadControlLedState()
         (channelNumber - 1) + g_channelOffset;
 
     byte color;
-    if (g_recHoldActive && g_recHoldNote == note)
-    {
-      // A right-column button being held for the note-mode gesture.
-      color = kLaunchpadColorAmberHigh;
-    }
-    else if (g_channelMuteMask & (1U << internalChannel))
+    if (g_channelMuteMask & (1U << internalChannel))
     {
       color = kLaunchpadColorGreenHigh;
     }
@@ -734,13 +718,16 @@ void launchpadEchoLiveNote(
 // only (white) never writes to the grid, so onLaunchpadNoteOn skips it and
 // only echoes the touch live.
 //
-// The cursor is time-based, not touch-count-based: touches keep their real
-// spacing whatever the transport is doing, so the clock that decides which
-// step a touch lands on is wall time. The cursor advances by whole step
-// durations since the last touch, which keeps the real timing between
-// since the last touch, which keeps the real timing between touches and
-// leaves the skipped steps empty. Pads touched within the same step
-// duration stack as a chord on the base note already in that lane.
+// The cursor follows the clock that drives the transport. With the PIT
+// timer it is time-based, not touch-count-based: touches keep their real
+// spacing, the cursor advances by whole step durations since the last
+// touch, which keeps the real timing between touches and leaves the
+// skipped steps empty. With an external MIDI clock (F8 from MIDI IN) the
+// transport advances its playhead from the incoming pulses instead, so
+// the cursor follows that playhead: a touch lands on the step the
+// transport is quantizing to, the same place the hardware record path
+// would write it. Pads touched within the same step stack as a chord on
+// the base note already in that lane.
 //
 // The lane is the recording channel picked with the right-column buttons
 // before entering note mode (shifted by the scroll offset) - the same lane
@@ -764,10 +751,34 @@ void recordLaunchpadNotePitch(
   // timing of a launchpad-only performance. Stepping the anchor by +=
   // stepMs instead of re-reading millis() keeps the phase of the step
   // grid, so tempo changes mid-recording are respected too. The first
-  // touch only arms the clock, so the sequence always starts at step 0.
+  // touch only arms the clock, so the sequence always starts at step 0
+  // - except under an external MIDI clock, where the cursor follows the
+  // transport's playhead instead (see below).
   bool cursorMoved = false;
 
-  if (!g_noteModeClockArmed)
+  // An external MIDI clock owns the grid: the transport advances its playhead
+  // from the incoming pulses (see the F8 branch in handleHardwareMidiIn), so
+  // the cursor must follow that playhead instead of wall time, otherwise the
+  // two grids drift apart and a touch lands somewhere else than what is
+  // sounding. g_stepIndex points at the step that starts at the next
+  // boundary, which is exactly where the hardware record path writes a live
+  // hit, so both paths agree on the quantized position of a touch.
+  if (g_midiInClockActive && g_running)
+  {
+    if (g_noteModeClockArmed &&
+        g_launchpadRecordStep != g_stepIndex)
+    {
+      cursorMoved = true;
+    }
+    g_launchpadRecordStep = g_stepIndex;
+
+    // Keep the wall-clock anchor fresh so the time-based path below does not
+    // jump over the whole pause when the external source stops and the
+    // cursor falls back to it.
+    g_noteModeClockMs = millis();
+    g_noteModeClockArmed = true;
+  }
+  else if (!g_noteModeClockArmed)
   {
     g_noteModeClockMs = millis();
     g_noteModeClockArmed = true;
@@ -1223,21 +1234,18 @@ void handleMicrostepEditHold()
 }
 
 // -----------------------------------------------------------------------------
-// Note-mode gesture (long-press a right-column button to enter, long-press
-// the play/pause pad (98) to leave)
+// Note-mode gesture (hold the play/pause pad to enter / leave note mode)
 // -----------------------------------------------------------------------------
 
-// Called every loop: whichever pad started the clock - a right-column
-// record function button (notes 19..89) outside note mode, or the play/
-// pause pad (98) inside it - fires once it has been held past the window
-// for the mode we are currently in (kNoteModeEnterHoldMs outside note mode,
-// kNoteModeExitHoldMs inside it), while the pad is still held. Outside
-// note mode the button's press has already armed recording into its lane,
-// so the notes played next land there. The gesture fires once per press,
-// so entering and then leaving note mode takes one press each.
-void handleNoteModeHold()
+// Called every loop: a play/pause pad (98) held down starts a clock. Once it
+// has been held past the window for the mode we are currently in -
+// kNoteModeEnterHoldMs outside note mode, kNoteModeExitHoldMs inside it -
+// the gesture fires while the pad is still held. The press never acts on the
+// transport itself, so the release can tell a tap (play/pause) from a
+// gesture that already switched note mode.
+void handleLaunchpadNoteModeHold()
 {
-  if (!g_recHoldActive || g_recHoldTriggered)
+  if (!g_noteModeHoldActive || g_noteModeHoldTriggered)
   {
     return;
   }
@@ -1245,13 +1253,13 @@ void handleNoteModeHold()
   const uint16_t holdMs =
       g_launchpadNoteMode ? kNoteModeExitHoldMs : kNoteModeEnterHoldMs;
 
-  if ((millis() - g_recHoldStartMs) < holdMs)
+ if ((millis() - g_noteModeHoldStartMs) < holdMs)
   {
     return;
   }
 
-  g_recHoldTriggered = true;
-  g_recHoldActive = false;
+ g_noteModeHoldTriggered = true;
+  g_noteModeHoldActive = false;
 
   if (g_launchpadNoteMode)
   {
@@ -1405,30 +1413,29 @@ void handleLaunchpadControl(byte note)
       g_stepTimer = 0;
       g_substepIndex = 0;
       memset(g_recordSkipStep, 0xFF, sizeof(g_recordSkipStep));
-      restartMidiClockTimer();
 
+      // The input stream only drives the transport while it is actually
+      // ticking. Over a pause its pulses are ignored, so a stream that went
+      // silent cannot advance anything: hand the clock back to the PIT timer
+      // so the transport really restarts. If it is still ticking, re-anchor
+      // the pulse phase and the silence watch at this restart, so the pause's
+      // own silence does not read as a stopped source and re-pause us right
+      // away.
+      if (g_midiInClockActive && !inputClockIsLive())
+      {
+        g_midiInClockActive = false;
+      }
       if (g_midiInClockActive)
       {
-        // The incoming clock is the source, so starting here would put step
-        // 0 at an arbitrary point between its pulses and the pattern would
-        // open partway through a step of the clock's source. Arm the start
-        // instead: the next pulse opens it (see handleHardwareMidiIn).
-        // Clearing the played-step flag also keeps the wait window from
-        // replaying substeps of the step the pause left off.
-        g_midiInClockAwaitingStart = true;
         g_midiInClockPulseCount = 0;
-        g_hasPlayedStep = false;
-
-        // The wait for the opening pulse is measured from here, so a source
-        // that is not ticking stops the transport instead of leaving it armed
-        // forever (see stopForMissingClockPulses).
         g_midiInClockLastPulseMs = millis();
       }
-      else
-      {
-        midiOutSendStart();
-        advanceSequencerStep();  // Start the first step immediately.
-      }
+
+      restartMidiClockTimer();
+
+      midiOutSendStart();
+      advanceSequencerStep();  // Start the first step immediately.
+     
     }
     break;
 
@@ -1624,8 +1631,8 @@ void onLaunchpadControlChange(
   //   In Live/Note Mode that pad reports as pitch 0 / control 0 rather than
   //   as its Programmer-Mode pad address, and 0 is not a usable control
   //   number - so swallow it here instead of letting it fall through to the
-  //   generic control handling. Note mode leaves through a long press of the
-  //   play/pause pad (98), handled in the top-row branch below.
+  //   generic control handling. Note mode leaves through the held play/pause
+  //   pad (98), handled in the top-row branch below.
   // ---------------------------------------------------------------------------
 
   if (g_launchpadNoteMode && control == kLaunchpadNoteModeIgnoredNote)
@@ -1668,8 +1675,7 @@ void onLaunchpadControlChange(
     // Note mode keeps the right column inert: the recording lane is picked
     // before note mode is entered, and g_modifierMode stays 0 while note mode
     // runs, so without this guard the pads would fall through to the record-
-    // channel path below and re-arm the transport mid-recording. Modifier
-    // modes keep the right column on mute / delete / save / load only.
+    // channel path below and re-arm the transport mid-recording.
     if (g_launchpadNoteMode || g_modifierMode > 0)
     {
       // Act only on press so mute is a persistent toggle, not momentary.
@@ -1724,13 +1730,6 @@ void onLaunchpadControlChange(
       g_recordingChannelOffset =
           channelNumber - 1;
 
-      // A long press enters note mode; the press already armed the lane, so
-      // the notes played after the switch land in it.
-      g_recHoldStartMs = millis();
-      g_recHoldActive = true;
-      g_recHoldTriggered = false;
-      g_recHoldNote = control;
-
       // Pressing a lane pad selects the lane in every mode, but it only arms
       // recording when the transport is in record mode; in play-only mode the
       // lane pads stay lane selectors without capturing anything.
@@ -1748,16 +1747,7 @@ void onLaunchpadControlChange(
     // RELEASE RECORD CHANNEL BUTTON
     // -------------------------------------------------------------------------
 
-    if (value == 0)
-    {
-      // Released before the gesture window: the enter never fires. This has
-      // to run even in play-only mode, where the press armed no recording.
-      if (g_recHoldActive && !g_recHoldTriggered && g_recHoldNote == control)
-      {
-        g_recHoldActive = false;
-      }
-
-      if (g_recordingHeldNote)
+    if (value == 0 && g_recordingHeldNote) 
       {
         g_recordingHeldNote = false;
         g_recording = false;
@@ -1774,7 +1764,6 @@ void onLaunchpadControlChange(
 
           midiOutSendStart();
         }
-      }
 
       refreshLaunchpadControlLedState();
       return;
@@ -1788,63 +1777,43 @@ void onLaunchpadControlChange(
   if (isLaunchpadTopRowControlNote(control))
   {
     // -----------------------------------------------------------------------
-    // PLAY/PAUSE PAD (98): tap cycles play-only / record / pause; a long
-    // press inside note mode (~kNoteModeExitHoldMs) leaves it. The enter
-    // gesture belongs to the right-column record function buttons, so
-    // outside note mode this pad keeps only its transport meaning.
+    // PLAY/PAUSE PAD (98): tap cycles play-only / record / pause, hold =
+    // enter / leave note mode
+    //   A press only starts the hold clock; handleLaunchpadNoteModeHold()
+    //   switches note mode once the pad has been held past the window for the
+    //   mode we are in (kNoteModeEnterHoldMs outside note mode,
+    //   kNoteModeExitHoldMs inside it). Releasing before that keeps the
+    //   pad's normal meaning, so a quick tap still cycles the transport -
+    //   resolved on release rather than on press, which is what lets the
+    //   three meanings share one pad.
     // -----------------------------------------------------------------------
 
     if (control == kLaunchpadTopRowControlNoteMin + 7)
     {
       if (value != 0)
       {
-        if (g_launchpadNoteMode)
-        {
-          // Press inside note mode starts the exit clock; the handler
-          // fires the exit while the pad is still held.
-          g_recHoldStartMs = millis();
-          g_recHoldActive = true;
-          g_recHoldTriggered = false;
-          g_recHoldNote = control;
-        }
-        else
-        {
-          // Outside note mode this pad is a plain tap, so a gesture that
-          // already fired on an earlier press must not linger here to
-          // swallow this release.
-          g_recHoldActive = false;
-          g_recHoldTriggered = false;
-          g_recHoldNote = 0;
-        }
+        g_noteModeHoldStartMs = millis();
+        g_noteModeHoldActive = true;
+        g_noteModeHoldTriggered = false;
+       
 
         refreshLaunchpadControlLedState();
         return;
       }
-
-      if (g_launchpadNoteMode)
+      // Release: a hold that already switched note mode must not also flip
+      // the transport; a tap that never reached the window is the play/stop
+      // pad.
+      if (g_noteModeHoldActive && !g_noteModeHoldTriggered)
       {
-        // Release inside note mode: a hold that already left note mode
-        // needs no follow-up, and a tap that never reached the window
-        // just cancels the pending clock - Novation's own firmware owns
-        // the transport in Live Mode.
-        if (g_recHoldActive && !g_recHoldTriggered && g_recHoldNote == control)
-        {
-          g_recHoldActive = false;
-        }
-
-        refreshLaunchpadControlLedState();
-        return;
+         handleLaunchpadControl(control);
       }
+      else
+          {
+             refreshLaunchpadControlLedState();
+          }
+     
 
-      // Release outside note mode: a hold that already left note mode must
-      // not also flip the transport; otherwise this is the play/stop pad.
-      if (g_recHoldNote == control && g_recHoldTriggered)
-      {
-        refreshLaunchpadControlLedState();
-        return;
-      }
-
-      handleLaunchpadControl(control);
+      g_noteModeHoldActive = false;
       return;
     }
 

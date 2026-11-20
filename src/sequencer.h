@@ -69,6 +69,12 @@ void handleSubstepPlayback();
 // until playback resumes.
 void releaseSoundingNotes();
 
+// Whether the incoming stream is still acting as the clock: a pulse has to
+// have arrived within the stop-gap window (see stopForMissingClockPulses).
+// A stream that went silent - or has not sent a pulse yet - cannot drive
+// the transport, so resume paths hand the clock back to the PIT timer.
+bool inputClockIsLive();
+
 // Pause the transport when the clock arriving from MIDI IN stops ticking:
 // the incoming stream is the source, so when its source pauses the
 // sequencer pauses with it (see the clock branch in handleHardwareMidiIn).

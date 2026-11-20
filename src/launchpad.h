@@ -60,19 +60,17 @@ void handleLaunchpadControl(byte note);
 void handleMicrostepEditHold();
 
 // -----------------------------------------------------------------------------
-// Note-mode gesture (long-press a right-column button to enter note mode,
-// long-press the play/pause pad (98) to leave it; tapping that pad cycles
-// play-only / record / pause)
+// Note-mode gesture (hold the play/pause pad to enter / leave note mode;
+// tapping it cycles play-only / record / pause)
 // -----------------------------------------------------------------------------
 
-// Called every loop: whichever pad started the clock - a right-column
-// record function button (notes 19..89) outside note mode, or the play/
-// pause pad (98) inside it - fires once it has been held past the window
-// for the mode we are currently in (kNoteModeEnterHoldMs outside note mode,
-// kNoteModeExitHoldMs inside it), while the pad is still held. The press
-// never acts on the transport itself, so the release can tell a tap (play/
-// pause) from a gesture that already fired.
-void handleNoteModeHold();
+// Called every loop: a play/pause pad (98) that was pressed starts a clock.
+// Once it has been held past the window for the mode we are currently in -
+// kNoteModeEnterHoldMs outside note mode, kNoteModeExitHoldMs inside it -
+// the gesture fires while the pad is still held. The press never acts on the
+// transport itself, so the release can tell a tap (play/pause) from a
+// gesture that already fired.
+void handleLaunchpadNoteModeHold();
 
 // -----------------------------------------------------------------------------
 // Chord edit (blue mode + long-press a grid pad)

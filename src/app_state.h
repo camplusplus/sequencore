@@ -340,15 +340,13 @@ extern byte g_launchpadEchoNote;
 extern byte g_launchpadEchoPressure;
 
 // -----------------------------------------------------------------------------
-// Note-mode gesture (long-press a right-column button to enter note mode,
-// long-press the play/pause pad (98) to leave it)
+// Note-mode gesture (hold the play/pause pad to enter / leave note mode)
 // -----------------------------------------------------------------------------
 
-// Hold a right-column record function button (notes 19..89) this long (ms)
-// to ENTER note mode. Deliberately longer than the 400 ms grid holds: that
-// column also selects the recording lane on a tap, so a normal tap must
-// never switch modes by accident - only a hold that clearly survives the
-// window is the gesture.
+// Hold the top-row play/pause pad (98) this long (ms) to ENTER note mode.
+// Deliberately longer than the 400 ms grid holds: that pad also toggles the
+// transport, so a normal tap must never switch modes by accident - only a
+// hold that clearly survives the window is the gesture.
 constexpr uint16_t kNoteModeEnterHoldMs = 700;
 
 // Leaving note mode needs a longer hold than entering it: inside note mode
@@ -357,16 +355,12 @@ constexpr uint16_t kNoteModeEnterHoldMs = 700;
 constexpr uint16_t kNoteModeExitHoldMs = 1200;
 
 // Tracks the long-press on the play/pause pad. The press starts the clock,
-// handleNoteModeHold() fires the enter/exit from loop() once the pad that
-// started the clock has been held past the window for the mode we are in:
-// a right-column record function button (notes 19..89) enters note mode -
-// its press already armed recording into that lane, so notes played while
-// note mode is active land there - and the play/pause pad (98) leaves it.
-// Releasing the pad cancels a pending (not yet fired) hold.
-extern uint32_t g_recHoldStartMs;
-extern bool g_recHoldActive;
-extern bool g_recHoldTriggered;
-extern uint8_t g_recHoldNote;
+// handleLaunchpadNoteModeHold() fires the enter/exit from loop() once the
+// pad has been held past the window for the mode we are in, and the release
+// decides whether the pad was just a tap (play/pause).
+extern uint32_t g_noteModeHoldStartMs;
+extern bool g_noteModeHoldActive;
+extern bool g_noteModeHoldTriggered;
 
 // Bit N set = channel N is muted (green modifier mode).
 extern uint32_t g_channelMuteMask;

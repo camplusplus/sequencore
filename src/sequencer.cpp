@@ -139,6 +139,22 @@ void sendStepClockPulse()
   midiOutSendClock();
 }
 
+// Whether the incoming stream is still acting as the clock: a pulse has to
+// have arrived within the stop-gap window. A stream that went silent (or
+// has not sent a pulse yet) cannot drive the transport, so the resume paths
+// hand the clock back to the PIT timer instead of waiting on pulses that
+// will never arrive.
+bool inputClockIsLive()
+{
+  if (!g_midiInClockActive || g_midiInClockPulseGapMs == 0)
+  {
+    return false;
+  }
+
+  return (millis() - g_midiInClockLastPulseMs) <=
+      (uint32_t)g_midiInClockPulseGapMs * kMidiInClockStopGapFactor;
+}
+
 // -----------------------------------------------------------------------------
 // Incoming clock: stop when its source stops
 // -----------------------------------------------------------------------------
@@ -636,16 +652,14 @@ void handleHardwareMidiIn()
       ++g_hwNotesHeld;
     }
 
-    // We only record into the current step while holding
-    // a Launchpad recording-channel button.
+    // Holding a Launchpad recording-channel button arms recording, but the
+    // lane is the channel the note arrived on, not the button's lane: a
+    // TR-8 on MIDI channel 8 records into lane 8, so its notes land where
+    // they are played back, whatever the button (or the scroll offset) says.
     if (g_recordingHeldNote)
     {
-      const uint8_t recordChannel =
-          g_recordingChannelOffset +
-          g_channelOffset;
-
       recordCurrentStep(
-          recordChannel,
+          channel,
           data1,
           data2);
     }
@@ -747,23 +761,16 @@ void handleHardwareMidiIn()
 
   if (type == midi::Start)
   {
-    // Only meaningful once the input stream is the clock.
-    if (!g_midiInClockActive)
-    {
-      return;
-    }
-
     // Forward it so the outputs see the same start.
     midiOutSendStart();
 
-    // Mirror the pad's pause -> play transition: the source restarted its
-    // pattern, so restart ours from the first step.
+    // Restart the transport, but keep the mode that was in effect before the
+    // pause: a stop (explicit or a silent source) never switches play-only vs
+    // record, so a source that restarts while we were recording resumes
+    // recording, with any lane-pad capture still armed. The pad's pause ->
+    // play transition always lands in play only; the source's does not.
     g_running = true;
-    g_playOnlyMode = true;
     g_userPaused = false;
-
-    g_recordingHeldNote = false;
-    g_recording = false;
 
     g_stepIndex = 0;
     g_stepTimer = 0;
@@ -771,12 +778,28 @@ void handleHardwareMidiIn()
     memset(g_recordSkipStep, 0xFF, sizeof(g_recordSkipStep));
     g_hasPlayedStep = false;
 
-    // A start is a step boundary, so count from here: the pulse that opens
-    // step 0 is the next one, which is where the source's step 0 begins.
-    g_midiInClockAwaitingStart = false;
-    g_midiInClockPulseCount =
-        static_cast<uint8_t>(kMidiInClockPulsesPerStep - 1);
-    g_midiInClockLastPulseMs = millis();
+    if (inputClockIsLive())
+    {
+      // A start is a step boundary, so count from here: the pulse that opens
+      // step 0 is the next one, which is where the source's step 0 begins.
+      g_midiInClockAwaitingStart = false;
+      g_midiInClockPulseCount =
+          static_cast<uint8_t>(kMidiInClockPulsesPerStep - 1);
+      g_midiInClockLastPulseMs = millis();
+    }
+    else
+    {
+      // The stream is not ticking: START arrived before any pulse (or the
+      // source sends no clock at all), or it went silent over the pause.
+      // Waiting for a pulse that may never come would leave the transport
+      // stopped, so the PIT clock drives it and the step opens on the START
+      // itself, like the pad's pause -> play transition.
+      g_midiInClockActive = false;
+      g_midiInClockAwaitingStart = false;
+      g_midiInClockPulseCount = 0;
+      restartMidiClockTimer();
+      advanceSequencerStep();
+    }
 
     sdStorePlayAutoTracks();
     refreshLaunchpadGridLedState();
