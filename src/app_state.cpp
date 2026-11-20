@@ -190,12 +190,15 @@ byte g_launchpadEchoNote = 0;
 byte g_launchpadEchoPressure = 0;
 
 // -----------------------------------------------------------------------------
-// Note-mode gesture (hold the play/pause pad to enter / leave note mode)
+// Note-mode gesture (long-press a right-column record function button to
+// enter note mode, long-press the play/pause pad (98) to leave it; the
+// button's lane records the notes)
 // -----------------------------------------------------------------------------
 
-bool g_noteModeHoldActive = false;
-bool g_noteModeHoldTriggered = false;
-uint32_t g_noteModeHoldStartMs = 0;
+bool g_recHoldActive = false;
+bool g_recHoldTriggered = false;
+uint8_t g_recHoldNote = 0;
+uint32_t g_recHoldStartMs = 0;
 
 // -----------------------------------------------------------------------------
 // Timers

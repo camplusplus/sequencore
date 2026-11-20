@@ -75,11 +75,12 @@ void loop()
   handleMicrostepEditHold();
 
   // ---------------------------------------------------------------------------
-  // Note-mode gesture: hold the play/pause pad (98) -> enter / leave note mode
+  // Note-mode gesture: long-press a right-column record function button to
+  // enter, long-press the play/pause pad (98) to leave
   // ---------------------------------------------------------------------------
 
-  handleLaunchpadNoteModeHold();
-  
+  handleNoteModeHold();
+
   // ---------------------------------------------------------------------------
   // Substep playback: fire slots 1..7 for lanes using the substep grid
   // ---------------------------------------------------------------------------
