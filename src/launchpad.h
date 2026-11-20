@@ -22,6 +22,11 @@ void sendLaunchpadScaleMode();
 void enterLaunchpadNoteMode();
 void exitLaunchpadNoteMode();
 
+// Close a live note-mode echo session: sends the release for a pad that was
+// sounding through the transport, so a transport stopped by anything else than
+// a pad leaves no stuck key.
+void closeLaunchpadEchoSession();
+
 void refreshLaunchpadGridLedState();
 void refreshLaunchpadControlLedState();
 

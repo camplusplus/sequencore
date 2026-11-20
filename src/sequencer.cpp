@@ -139,6 +139,55 @@ void sendStepClockPulse()
   midiOutSendClock();
 }
 
+// Whether the incoming stream is still acting as the clock: a pulse has to
+// have arrived within the stop-gap window. A stream that went silent (or
+// has not sent a pulse yet) cannot drive the transport, so the resume paths
+// hand the clock back to the PIT timer instead of waiting on pulses that
+// will never arrive.
+bool inputClockIsLive()
+{
+  if (!g_midiInClockActive || g_midiInClockPulseGapMs == 0)
+  {
+    return false;
+  }
+
+  return (millis() - g_midiInClockLastPulseMs) <=
+      (uint32_t)g_midiInClockPulseGapMs * kMidiInClockStopGapFactor;
+}
+
+// -----------------------------------------------------------------------------
+// Incoming clock: stop when its source stops
+// -----------------------------------------------------------------------------
+
+// The incoming stream is the clock source, so a source that pauses has to
+// pause the sequencer too - otherwise the pattern keeps advancing against a
+// clock that no longer ticks and the two drift apart once it resumes.
+void stopForMissingClockPulses()
+{
+  if (!g_midiInClockActive || !g_running || g_midiInClockPulseGapMs == 0)
+  {
+    return;
+  }
+
+  // One whole step of silence (six pulse intervals at the tempo the pulses
+  // are actually arriving at) reads as the source pausing rather than
+  // hiccuping: a dropped pulse is only two intervals.
+  if ((millis() - g_midiInClockLastPulseMs) <=
+      (uint32_t)g_midiInClockPulseGapMs * kMidiInClockStopGapFactor)
+  {
+    return;
+  }
+
+  // The same stop the play/pause pad performs, so the outputs see a pause and
+  // the pad goes dark rather than a silent, still-running transport.
+  g_running = false;
+  g_userPaused = true;
+
+  releaseSoundingNotes();
+  closeLaunchpadEchoSession();
+  midiOutSendStop();
+}
+
 // -----------------------------------------------------------------------------
 // Sequence editing
 // -----------------------------------------------------------------------------
@@ -655,12 +704,41 @@ void handleHardwareMidiIn()
       return;
     }
 
+    // Remember where the pulse fell: the loop watches the silence that
+    // follows it (see stopForMissingClockPulses). A first pulse, or the long
+    // gap since a pause or a start, has no usable predecessor to measure
+    // against, so fall back to the tempo the Launchpad shows.
+    const uint32_t pulseMs = millis();
+    const uint32_t gapMs = pulseMs - g_midiInClockLastPulseMs;
+    g_midiInClockLastPulseMs = pulseMs;
+
+    g_midiInClockPulseGapMs =
+        (gapMs > 0 && gapMs < 1000)
+            ? (uint16_t)gapMs
+            : (uint16_t)(calculateClockPulseUs() / 1000UL);
+
+    // A start armed over a pause opens the pattern on this pulse instead of
+    // at the moment the pad was pressed, so step 0 begins exactly on a pulse
+    // of the clock's source and every step boundary lands on one after it.
+    // START travels with it so the outputs begin together too.
+    const bool startsStep = g_midiInClockAwaitingStart;
+    if (startsStep)
+    {
+      g_midiInClockAwaitingStart = false;
+      g_midiInClockPulseCount = 0;
+      midiOutSendStart();
+    }
+
     midiOutSendClock();
 
-    // 24ppqn: six pulses per step (a 16th note).
-    if (++g_midiInClockPulseCount < kMidiInClockPulsesPerStep)
+    // The pulse that opens a step is not counted towards the next one; the
+    // six that follow it are (24ppqn: six pulses per 16th-note step).
+    if (!startsStep)
     {
-      return;
+      if (++g_midiInClockPulseCount < kMidiInClockPulsesPerStep)
+      {
+        return;
+      }
     }
 
     g_midiInClockPulseCount = 0;
@@ -670,6 +748,83 @@ void handleHardwareMidiIn()
     advanceSequencerStep();
     sdStorePlayAutoTracks();
     refreshLaunchpadGridLedState();
+
+    return;
+  }
+
+  // ---------------------------------------------------------------------------
+  // MIDI START (FA) / STOP (FC) from the input source
+  // ---------------------------------------------------------------------------
+
+  // The source also announces its transport boundaries, and they are the only
+  // exact anchors available: a start is where its step 0 is, a stop is where
+  // its pattern ends. Without them the pulse phase is arbitrary and the two
+  // play different steps at the same time.
+
+  if (type == midi::Start)
+  {
+    // Forward it so the outputs see the same start.
+    midiOutSendStart();
+
+    // Restart the transport, but keep the mode that was in effect before the
+    // pause: a stop (explicit or a silent source) never switches play-only vs
+    // record, so a source that restarts while we were recording resumes
+    // recording, with any lane-pad capture still armed. The pad's pause ->
+    // play transition always lands in play only; the source's does not.
+    g_running = true;
+    g_userPaused = false;
+
+    g_stepIndex = 0;
+    g_stepTimer = 0;
+    g_substepIndex = 0;
+    memset(g_recordSkipStep, 0xFF, sizeof(g_recordSkipStep));
+    g_hasPlayedStep = false;
+
+    if (inputClockIsLive())
+    {
+      // A start is a step boundary, so count from here: the pulse that opens
+      // step 0 is the next one, which is where the source's step 0 begins.
+      g_midiInClockAwaitingStart = false;
+      g_midiInClockPulseCount =
+          static_cast<uint8_t>(kMidiInClockPulsesPerStep - 1);
+      g_midiInClockLastPulseMs = millis();
+    }
+    else
+    {
+      // The stream is not ticking: START arrived before any pulse (or the
+      // source sends no clock at all), or it went silent over the pause.
+      // Waiting for a pulse that may never come would leave the transport
+      // stopped, so the PIT clock drives it and the step opens on the START
+      // itself, like the pad's pause -> play transition.
+      g_midiInClockActive = false;
+      g_midiInClockAwaitingStart = false;
+      g_midiInClockPulseCount = 0;
+      restartMidiClockTimer();
+      advanceSequencerStep();
+    }
+
+    sdStorePlayAutoTracks();
+    refreshLaunchpadGridLedState();
+
+    return;
+  }
+
+  if (type == midi::Stop)
+  {
+    // Only meaningful once the input stream is the clock.
+    if (!g_midiInClockActive)
+    {
+      return;
+    }
+
+    // The source ended its pattern: pause the transport, like a source that
+    // goes silent does (see stopForMissingClockPulses).
+    g_running = false;
+    g_userPaused = true;
+
+    releaseSoundingNotes();
+    closeLaunchpadEchoSession();
+    midiOutSendStop();
 
     return;
   }

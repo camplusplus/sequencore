@@ -56,7 +56,8 @@ namespace
   constexpr size_t kLedCacheSize =
       kLedNoteMax - kLedNoteMin + 1;
 
-  // A color value is 0..18; 0xFF is a valid "not yet synced" sentinel.
+  // Color values index the Launchpad 128-color palette (0..127); 0xFF is
+  // the "not yet synced" sentinel.
   constexpr byte kLedColorUnsynced = 0xFF;
 
   // Last color actually sent to each LED. Re-sending an identical
@@ -287,7 +288,7 @@ void exitLaunchpadNoteMode()
   g_launchpadNoteMode = false;
 
   // Leaving note mode always lands back on the "no modifier" state; the
-  // gesture that leaves it is the held play/pause pad (98).
+  // gesture that leaves it is a long-press of a right-column button.
   g_modifierMode = 0;
   g_launchpadRecordStep = 0;
   g_noteModeClockMs = 0;
@@ -614,6 +615,7 @@ void refreshLaunchpadControlLedState()
                                    : kLaunchpadColorRedHigh)));
 
   // Right column: channel control pads.
+  //   amber  = held down for the note-mode enter/exit gesture
   //   green  = muted
   //   yellow = has recorded steps
   //   white  = empty
@@ -1224,12 +1226,12 @@ void handleLaunchpadNoteModeHold()
   const uint16_t holdMs =
       g_launchpadNoteMode ? kNoteModeExitHoldMs : kNoteModeEnterHoldMs;
 
-  if ((millis() - g_noteModeHoldStartMs) < holdMs)
+ if ((millis() - g_noteModeHoldStartMs) < holdMs)
   {
     return;
   }
 
-  g_noteModeHoldTriggered = true;
+ g_noteModeHoldTriggered = true;
   g_noteModeHoldActive = false;
 
   if (g_launchpadNoteMode)
@@ -1384,10 +1386,29 @@ void handleLaunchpadControl(byte note)
       g_stepTimer = 0;
       g_substepIndex = 0;
       memset(g_recordSkipStep, 0xFF, sizeof(g_recordSkipStep));
+
+      // The input stream only drives the transport while it is actually
+      // ticking. Over a pause its pulses are ignored, so a stream that went
+      // silent cannot advance anything: hand the clock back to the PIT timer
+      // so the transport really restarts. If it is still ticking, re-anchor
+      // the pulse phase and the silence watch at this restart, so the pause's
+      // own silence does not read as a stopped source and re-pause us right
+      // away.
+      if (g_midiInClockActive && !inputClockIsLive())
+      {
+        g_midiInClockActive = false;
+      }
+      if (g_midiInClockActive)
+      {
+        g_midiInClockPulseCount = 0;
+        g_midiInClockLastPulseMs = millis();
+      }
+
       restartMidiClockTimer();
 
       midiOutSendStart();
       advanceSequencerStep();  // Start the first step immediately.
+     
     }
     break;
 
@@ -1699,23 +1720,23 @@ void onLaunchpadControlChange(
     // RELEASE RECORD CHANNEL BUTTON
     // -------------------------------------------------------------------------
 
-    if (value == 0 && g_recordingHeldNote)
-    {
-      g_recordingHeldNote = false;
-      g_recording = false;
-
-      // Make sure sequencer is running after recording, but never over an
-      // explicit stop: pausing with the top-row play/stop pad first lets
-      // Launchpad note mode record pitches while the transport stays put.
-      if (!g_running && !g_userPaused)
+    if (value == 0 && g_recordingHeldNote) 
       {
-        g_running = true;
-        g_stepTimer = 0;
-        g_substepIndex = 0;
-        restartMidiClockTimer();
+        g_recordingHeldNote = false;
+        g_recording = false;
 
-        midiOutSendStart();
-      }
+        // Make sure sequencer is running after recording, but never over an
+        // explicit stop: pausing with the top-row play/stop pad first lets
+        // Launchpad note mode record pitches while the transport stays put.
+        if (!g_running && !g_userPaused)
+        {
+          g_running = true;
+          g_stepTimer = 0;
+          g_substepIndex = 0;
+          restartMidiClockTimer();
+
+          midiOutSendStart();
+        }
 
       refreshLaunchpadControlLedState();
       return;
@@ -1747,22 +1768,23 @@ void onLaunchpadControlChange(
         g_noteModeHoldStartMs = millis();
         g_noteModeHoldActive = true;
         g_noteModeHoldTriggered = false;
+       
 
         refreshLaunchpadControlLedState();
         return;
       }
-
       // Release: a hold that already switched note mode must not also flip
       // the transport; a tap that never reached the window is the play/stop
       // pad.
       if (g_noteModeHoldActive && !g_noteModeHoldTriggered)
       {
-        handleLaunchpadControl(control);
+         handleLaunchpadControl(control);
       }
       else
-      {
-        refreshLaunchpadControlLedState();
-      }
+          {
+             refreshLaunchpadControlLedState();
+          }
+     
 
       g_noteModeHoldActive = false;
       return;

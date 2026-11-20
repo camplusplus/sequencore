@@ -97,19 +97,25 @@ constexpr uint8_t kLaunchpadColorOff = 0;
 constexpr uint8_t kLaunchpadColorWhiteLow = 1;
 constexpr uint8_t kLaunchpadColorWhiteHigh = 3;
 
-constexpr uint8_t kLaunchpadColorAmberLow = 7;
-constexpr uint8_t kLaunchpadColorAmberHigh = 9;
+constexpr uint8_t kLaunchpadColorAmberLow = 11; // AMBER_LO
+constexpr uint8_t kLaunchpadColorAmberHigh = 9; // AMBER_HI
 
 constexpr uint8_t kLaunchpadColorRedLow = 4;
 constexpr uint8_t kLaunchpadColorRedHigh = 6;
 
-constexpr uint8_t kLaunchpadColorBlueLow = 42;
+// The Launchpad X is RGB-capable: its color-select command indexes the
+// 128-entry palette (BLACK 0 ... WHITE 3, ROSE 4 ... RED 6 ... AMBER 9 ...
+// YELLOW 14 ... LIME 18 ... GREEN 22 ... CYAN 34 ... OCEAN 42 ... BLUE 46).
+// The old green values (16/18) were YELLOW_LIME and LIME, which read as
+// yellow on the device, and 42 is OCEAN, which reads as cyan; use the true
+// palette entries instead.
+constexpr uint8_t kLaunchpadColorBlueLow = 45;   // BLUE_HI
 
-constexpr uint8_t kLaunchpadColorYellowLow = 12;
-constexpr uint8_t kLaunchpadColorYellowHigh = 14;
+constexpr uint8_t kLaunchpadColorYellowLow = 12;  // AMBER_YELLOW
+constexpr uint8_t kLaunchpadColorYellowHigh = 14; // YELLOW
 
-constexpr uint8_t kLaunchpadColorGreenLow = 16;
-constexpr uint8_t kLaunchpadColorGreenHigh = 18;
+constexpr uint8_t kLaunchpadColorGreenLow = 22;  // GREEN
+constexpr uint8_t kLaunchpadColorGreenHigh = 21; // GREEN_HI
 
 // -----------------------------------------------------------------------------
 // Sequence state
@@ -233,6 +239,25 @@ extern uint8_t g_midiInClockPulseCount;
 
 // Pulses per step at 24ppqn: 24 per quarter note = 6 per 16th-note step.
 constexpr uint8_t kMidiInClockPulsesPerStep = 6;
+
+// Set when play is pressed while an incoming clock is the source: the
+// pattern is not started at the moment of the press - that would put step
+// 0 at an arbitrary point between the incoming pulses - but armed here and
+// opened by the next pulse in handleHardwareMidiIn(), which phase-locks the
+// step grid to the clock's. Only touched from loop().
+extern bool g_midiInClockAwaitingStart;
+
+// Where the last received clock pulse fell and the interval that preceded it,
+// so the loop can tell that the clock's source stopped ticking rather than
+// hiccuping (see stopForMissingClockPulses). The measured interval is what
+// drives the threshold, so a source playing at a tempo the Launchpad does not
+// show still stops on its own terms. Only touched from loop().
+extern uint32_t g_midiInClockLastPulseMs;
+extern uint16_t g_midiInClockPulseGapMs;
+
+// Silence this many times the measured pulse interval means the source
+// stopped: 6 is one whole step of it, while a dropped pulse is only two.
+constexpr uint8_t kMidiInClockStopGapFactor = 6;
 
 // -----------------------------------------------------------------------------
 // Timers
