@@ -60,6 +60,8 @@ Connect the Launchpad to the Teensy host USB, but provide a powered USB hub (or 
 
 Build and upload from the project folder with:
 ```
+pio run -e teensy41 -t upload || pio run -e teensy41 -t upload
+# no build
 ~/.platformio/penv/bin/pio run -e teensy41 -t upload -t nobuild
 ```
 
