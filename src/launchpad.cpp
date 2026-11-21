@@ -959,8 +959,13 @@ void stageLaunchpadPad(
       editLane.substep[col].note = 0;
       editLane.substep[col].velocity = 0;
     }
-    else
+    else if (g_lastHwVelocity != 0)
     {
+      // Same rule as the step editor: only a note that was actually
+      // recorded (hardware MIDI or a note-mode grid touch) is remembered,
+      // and both writers keep a non-zero velocity. Until then there is
+      // nothing to place, so the slot stays empty instead of lighting up
+      // with a silent pitch-0 cell.
       editLane.substep[col].active = true;
       editLane.substep[col].note = g_lastHwNote;
       editLane.substep[col].velocity = g_lastHwVelocity;
@@ -1113,8 +1118,10 @@ void stageLaunchpadPad(
   }
 
   // While holding the record button, touching a grid pad records
-  // the last hardware MIDI keyboard note onto that step. If the
-  // step is already on this pad, delete it instead (toggle).
+  // the last hardware MIDI keyboard note onto that step - or the last
+  // note played in Launchpad note mode, which is remembered in the
+  // same place. If the step is already on this pad, delete it instead
+  // (toggle).
   if (g_recordingHeldNote)
   {
     if (lane.isSubstepActive())
@@ -1126,8 +1133,14 @@ void stageLaunchpadPad(
 
       lane.muted = false;
     }
-    else
+    else if (g_lastHwVelocity != 0)
     {
+      // Only a note that was actually recorded can be re-placed: both
+      // writers of g_lastHwNote (the hardware MIDI path and the note-mode
+      // grid write) always leave a non-zero velocity behind, so a zero
+      // here means nothing has been remembered yet. Writing it would
+      // light the pad with an empty cell that plays back as silence,
+      // so the touch stays inert instead.
       lane.substep[0].active = true;
       lane.muted = false;
       lane.substep[0].note = g_lastHwNote;
@@ -1469,6 +1482,14 @@ void onLaunchpadNoteOn(
       return;
     }
 
+    // Sound the touch live in every transport mode. The velocity fallback
+    // matches the one the grid write used, so the echo and the recorded cell
+    // agree on how hard the pad was hit.
+    const byte resolvedVelocity =
+        velocity != 0
+            ? velocity
+            : g_launchpadRecordVelocity;
+
     // Play-only (white) mode protects the sequence: the touch is not written
     // into the grid, but it still sounds live below, exactly as it does in
     // record and paused mode.
@@ -1484,15 +1505,18 @@ void onLaunchpadNoteOn(
           channel,
           note,
           velocity);
-    }
 
-    // Sound the touch live in every transport mode. The velocity fallback
-    // matches the one the grid write used, so the echo and the recorded cell
-    // agree on how hard the pad was hit.
-    const byte resolvedVelocity =
-        velocity != 0
-            ? velocity
-            : g_launchpadRecordVelocity;
+      // Remember the touch as the last played note, exactly like the
+      // hardware MIDI path in handleHardwareMidiIn(): after leaving note
+      // mode, holding a right-column record button and touching a grid pad
+      // adds this note to that step, so a note played on the Launchpad's
+      // own grid can be re-placed anywhere in the sequence. Only a touch
+      // that was actually written into the grid is remembered - a play-only
+      // touch sounds live but leaves the sequence untouched, so it must
+      // not replace the last note that was recorded.
+      g_lastHwNote = note;
+      g_lastHwVelocity = resolvedVelocity;
+    }
 
     launchpadEchoLiveNote(
         note,

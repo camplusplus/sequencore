@@ -214,8 +214,9 @@ extern bool g_overdub;
 extern bool g_recordingHeldNote;
 extern uint8_t g_recordingChannelOffset;
 
-// Last note/velocity received from hardware MIDI (NoteOn).
-// Used so grid pads can record the hardware keyboard note.
+// Last note/velocity received from hardware MIDI (NoteOn), and the last
+// note played in Launchpad note mode: used so grid pads can record it
+// while holding a right-column record button.
 extern byte g_lastHwNote;
 extern byte g_lastHwVelocity;
 
