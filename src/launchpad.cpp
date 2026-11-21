@@ -887,6 +887,16 @@ void recordLaunchpadNotePitch(
   // land on the same step instead of a run of consecutive steps. Sounding
   // the touch live is not done here either - onLaunchpadNoteOn echoes it in
   // every transport mode, including play-only where nothing was written.
+
+  // While the transport runs, the echo already sounded this hit, and the
+  // playhead reaches the step we just wrote on this same pass (or the next
+  // one). Arm the per-channel skip hook so that first playback of the step
+  // stays silent; the echo covers it, and later loops play the cell
+  // normally. Over a pause nothing plays, so nothing to arm.
+  if (g_running)
+  {
+    g_recordSkipStep[laneChannel] = g_launchpadRecordStep;
+  }
 }
 
 void stageLaunchpadPad(
